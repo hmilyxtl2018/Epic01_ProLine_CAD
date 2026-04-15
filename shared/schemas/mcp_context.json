@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MCPContext",
+  "description": "MCP 上下文记录 — 全链路追溯。基于执行计划 §1.2 mcp_context 约定。",
+  "type": "object",
+  "properties": {
+    "mcp_context_id": {"type": "string", "pattern": "^ctx-"},
+    "agent": {"type": "string"},
+    "agent_version": {"type": "string"},
+    "parent_context_id": {"type": ["string", "null"]},
+    "input_payload": {"type": "object"},
+    "output_payload": {"type": "object"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "latency_ms": {"type": "integer", "minimum": 0},
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "source": {"type": "string"},
+        "sha256": {"type": "string"},
+        "tool_versions": {"type": "object"}
+      }
+    },
+    "status": {"type": "string", "enum": ["SUCCESS", "SUCCESS_WITH_WARNINGS", "PARTIAL", "ERROR"]},
+    "error_message": {"type": ["string", "null"]},
+    "step_breakdown": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "step": {"type": "string"},
+          "latency_ms": {"type": "integer"},
+          "status": {"type": "string"}
+        }
+      }
+    }
+  },
+  "required": ["mcp_context_id", "agent", "timestamp", "status"]
+}

@@ -1,0 +1,75 @@
+{
+  "description": "Spike-01 DWG/DXF 真实工业产线底图测试数据",
+  "sources": [
+    {
+      "name": "dwgmodels.com",
+      "url": "https://dwgmodels.com/architecture_industrial/",
+      "license": "Free (非商用)",
+      "purpose": "真实工业产线/工厂平面布置图 DWG+DXF"
+    },
+    {
+      "name": "LibreDWG",
+      "url": "https://github.com/LibreDWG/libredwg",
+      "license": "GPLv3",
+      "purpose": "DWG 二进制格式兼容性验证 (R2000~R2018)"
+    },
+    {
+      "name": "ezdxf",
+      "url": "https://github.com/mozman/ezdxf",
+      "license": "MIT",
+      "purpose": "DXF 实体解析验证 (Hatch, Block, Viewport)"
+    },
+    {
+      "name": "dxf-kit",
+      "url": "https://github.com/arbaev/dxf-kit",
+      "license": "MIT",
+      "purpose": "DXF 实体类型参考文件"
+    }
+  ],
+  "files": {
+    "industrial_dwg": [
+      {"file": "cold_rolled_steel_production.dwg", "source": "dwgmodels.com", "sizeKB": 5524, "version": "AC1021 (2007)", "desc": "冷轧钢生产线 — 完整钢铁冷轧产线车间平面图"},
+      {"file": "fish_processing_plant.dwg", "source": "dwgmodels.com", "sizeKB": 13853, "version": "AC1021 (2007)", "desc": "鱼类加工厂 — 含118图层、设备布线、工艺流程线"},
+      {"file": "woodworking_plant.dwg", "source": "dwgmodels.com", "sizeKB": 394, "version": "AC1021 (2007)", "desc": "木材加工厂 — 含设备(equipment)、轨道(rail)、墙体(wall)等分层"},
+      {"file": "woodworking_factory_1.dwg", "source": "dwgmodels.com", "sizeKB": 691, "version": "AC1021 (2007)", "desc": "木工工厂1 — 含楼层(floor)、设备家具(furn_eq)、墙体(walls)等9层"}
+    ],
+    "industrial_dxf": [
+      {"file": "cold_rolled_steel_production.dxf", "source": "ODA转换", "sizeKB": 43715, "version": "AC1032", "layers": 5, "entities": 95856, "desc": "冷轧钢生产线DXF — LINE:78954, ARC:5507, LWPOLYLINE:4880, CIRCLE:3630, DIMENSION:45"},
+      {"file": "fish_processing_plant.dxf", "source": "ODA转换", "sizeKB": 84934, "version": "AC1032", "layers": 118, "entities": 104811, "desc": "鱼类加工厂DXF — 118层(axis/wall/techno/columns)，LINE:66659, SPLINE:12901, ARC:12609"},
+      {"file": "woodworking_plant.dxf", "source": "ODA转换", "sizeKB": 3287, "version": "AC1032", "layers": 11, "entities": 1563, "desc": "木材加工厂DXF — 11层(equipment/rail/wall/axis)，LINE:503, INSERT:202, MTEXT:136, HATCH:74"},
+      {"file": "woodworking_factory_1.dxf", "source": "ODA转换", "sizeKB": 3968, "version": "AC1032", "layers": 9, "entities": 11424, "desc": "木工工厂DXF — 9层(floor/walls/furn_eq)，LINE:6686, ARC:3210, LWPOLYLINE:1075"}
+    ],
+    "format_reference_dwg": [
+      {"file": "example_2000.dwg", "source": "LibreDWG", "sizeKB": 569, "desc": "DWG R2000 格式验证"},
+      {"file": "example_2007.dwg", "source": "LibreDWG", "sizeKB": 445, "desc": "DWG R2007 格式验证"},
+      {"file": "example_2018.dwg", "source": "LibreDWG", "sizeKB": 146, "desc": "DWG R2018 格式验证"},
+      {"file": "807_complex.dwg", "source": "ezdxf", "sizeKB": 495, "desc": "复杂图纸格式验证"}
+    ],
+    "dxf_feature_reference": [
+      {"file": "libredwg_2000.dxf", "source": "LibreDWG", "sizeKB": 1355, "version": "AC1015", "layers": 5, "entities": 68, "desc": "R2000版DXF — LWPOLYLINE/INSERT/DIMENSION"},
+      {"file": "libredwg_2018.dxf", "source": "LibreDWG", "sizeKB": 826, "version": "AC1032", "layers": 5, "entities": 68, "desc": "R2018版DXF — 跨版本比对"},
+      {"file": "usa_map.dxf", "source": "ezdxf", "sizeKB": 293, "version": "AC1027", "layers": 4, "entities": 59, "desc": "LWPOLYLINE轮廓"},
+      {"file": "custom_blocks.dxf", "source": "ezdxf", "sizeKB": 160, "version": "AC1024", "layers": 2, "entities": 5, "desc": "INSERT块引用"},
+      {"file": "viewport_layers.dxf", "source": "ezdxf", "sizeKB": 72, "version": "AC1027", "layers": 5, "entities": 4, "desc": "视口图层控制"},
+      {"file": "hatch_complex.dxf", "source": "ezdxf", "sizeKB": 72, "version": "AC1032", "layers": 2, "entities": 12, "desc": "复杂HATCH填充"},
+      {"file": "hatch_patterns.dxf", "source": "ezdxf", "sizeKB": 164, "version": "AC1027", "layers": 2, "entities": 98, "desc": "49组HATCH图案"},
+      {"file": "entities_all.dxf", "source": "dxf-kit", "sizeKB": 190, "version": "AC1024", "layers": 4, "entities": 116, "desc": "全实体类型混合"}
+    ]
+  },
+  "conversion_tool": {
+    "name": "ODA File Converter 27.1",
+    "source": "https://www.opendesign.com/guestfiles/oda_file_converter",
+    "installed_path": "C:\\Users\\hmily\\Documents\\ODAFileConverter\\ODAFileConverter.exe",
+    "note": "已安装，可将DWG↔DXF互转; CLI: ODAFileConverter.exe srcDir outDir ACAD2018 DXF 0 1"
+  },
+  "validation_summary": {
+    "total_files": 20,
+    "industrial_dwg": 4,
+    "industrial_dxf": 4,
+    "format_ref_dwg": 4,
+    "feature_ref_dxf": 8,
+    "all_dxf_parsed_by_ezdxf": true,
+    "largest_file": "fish_processing_plant.dxf (82.9 MB, 104811 entities, 118 layers)",
+    "most_entity_types": "cold_rolled_steel_production.dxf (LINE/ARC/LWPOLYLINE/CIRCLE/INSERT/MTEXT/HATCH/ELLIPSE/SPLINE/DIMENSION)"
+  }
+}

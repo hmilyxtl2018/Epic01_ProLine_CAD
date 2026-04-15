@@ -1,0 +1,1272 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CATIA到装配执行 - 3D矩阵可视化系统 v2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        .matrix-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            padding: 20px;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .view-panel {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .panel-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            font-weight: 600;
+            border-bottom: 2px solid rgba(255,255,255,0.2);
+        }
+        
+        .panel-content {
+            flex: 1;
+            overflow: auto;
+            padding: 20px;
+        }
+        
+        .view-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .view-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.3s;
+            background: #e0e7ff;
+            color: #667eea;
+        }
+        
+        .view-btn.active {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102,126,234,0.4);
+        }
+        
+        .matrix-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        
+        .matrix-table th, .matrix-table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+        }
+        
+        .matrix-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        
+        .matrix-table td {
+            background: white;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .matrix-table td:hover {
+            background: #f0f4ff;
+            transform: scale(1.05);
+        }
+        
+        .cell-content {
+            font-weight: 500;
+            padding: 4px;
+        }
+        
+        .cell-phase { background: #c8e6c9; color: #1b5e20; }
+        .cell-role-de { background: #bbdefb; color: #0d47a1; }
+        .cell-role-eng { background: #fff9c4; color: #f57f17; }
+        .cell-role-plan { background: #ffe0b2; color: #e65100; }
+        .cell-role-qa { background: #f8bbd0; color: #880e4f; }
+        
+        .tab-group {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #e0e0e0;
+            overflow-x: auto;
+        }
+        
+        .tab {
+            padding: 10px 16px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-weight: 600;
+            color: #999;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+            white-space: nowrap;
+        }
+        
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        
+        .legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 6px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+        }
+        
+        .sankey-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .sankey-column {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .sankey-item {
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .sankey-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        
+        .detail-panel {
+            background: #f9f9f9;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 6px;
+        }
+        
+        .detail-title {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .detail-content {
+            font-size: 12px;
+            line-height: 1.6;
+            color: #555;
+        }
+
+        /* ── 能力层叠加 overlay ── */
+        .overlay-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding: 10px 12px;
+            background: #f0f4ff;
+            border-radius: 8px;
+            border: 1px solid #c7d2fe;
+            flex-wrap: wrap;
+        }
+        .overlay-toolbar span {
+            font-size: 11px;
+            font-weight: 700;
+            color: #4338ca;
+            margin-right: 4px;
+        }
+        .overlay-btn {
+            padding: 5px 12px;
+            border-radius: 20px;
+            border: 2px solid transparent;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .overlay-btn.render   { background: #fff3cd; color: #92400e; border-color: #f59e0b; }
+        .overlay-btn.sim      { background: #dcfce7; color: #14532d; border-color: #22c55e; }
+        .overlay-btn.twin     { background: #fce7f3; color: #831843; border-color: #ec4899; }
+        .overlay-btn.render.on  { background: #f59e0b; color: white; }
+        .overlay-btn.sim.on     { background: #22c55e; color: white; }
+        .overlay-btn.twin.on    { background: #ec4899; color: white; }
+
+        /* cell overlay glow */
+        .cell-render-on  { outline: 3px solid #f59e0b !important; box-shadow: inset 0 0 0 2000px rgba(245,158,11,0.18) !important; }
+        .cell-sim-on     { outline: 3px solid #22c55e !important; box-shadow: inset 0 0 0 2000px rgba(34,197,94,0.18) !important; }
+        .cell-twin-on    { outline: 3px solid #ec4899 !important; box-shadow: inset 0 0 0 2000px rgba(236,72,153,0.22) !important; }
+        .cell-render-on.cell-sim-on { outline: 3px solid #a78bfa !important; box-shadow: inset 0 0 0 2000px rgba(139,92,246,0.22) !important; }
+
+        .capability-badge {
+            display: inline-block;
+            font-size: 9px;
+            font-weight: 700;
+            padding: 1px 4px;
+            border-radius: 3px;
+            margin: 1px;
+            vertical-align: middle;
+        }
+        .badge-render { background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; }
+        .badge-sim    { background: #dcfce7; color: #15803d; border: 1px solid #22c55e; }
+        .badge-twin   { background: #fce7f3; color: #9d174d; border: 1px solid #ec4899; }
+
+        /* ── 反馈回路面板 ── */
+        #feedback-view { display: none; }
+        .feedback-title {
+            font-weight: 700;
+            font-size: 13px;
+            color: #1e1b4b;
+            margin-bottom: 14px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e0e7ff;
+        }
+        .loop-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid;
+        }
+        .loop-card.design   { background: #eff6ff; border-color: #3b82f6; }
+        .loop-card.process  { background: #f0fdf4; border-color: #22c55e; }
+        .loop-card.sop      { background: #fffbeb; border-color: #f59e0b; }
+        .loop-card.quality  { background: #fdf4ff; border-color: #a855f7; }
+        .loop-arrow {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 80px;
+        }
+        .loop-node {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 4px 8px;
+            border-radius: 4px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .loop-connector {
+            width: 2px;
+            height: 20px;
+            background: repeating-linear-gradient(to bottom, #94a3b8 0px, #94a3b8 4px, transparent 4px, transparent 8px);
+            margin: 2px auto;
+            position: relative;
+        }
+        .loop-connector::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 6px solid #64748b;
+        }
+        .loop-info { flex: 1; font-size: 11px; color: #374151; }
+        .loop-info strong { font-size: 12px; display: block; margin-bottom: 4px; }
+        .loop-trigger { color: #6b7280; margin-top: 4px; font-style: italic; }
+
+        /* ── Cell ID label ── */
+        .cell-id-label {
+            font-family: monospace;
+            font-size: 9px;
+            font-weight: 700;
+            color: #9ca3af;
+            margin-bottom: 3px;
+            letter-spacing: 0.3px;
+        }
+
+        /* ── Detail Dialog Modal ── */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15,23,42,0.55);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(2px);
+        }
+        .modal-overlay.open { display: flex; }
+        .modal-box {
+            background: white;
+            border-radius: 14px;
+            width: 580px;
+            max-width: 92vw;
+            max-height: 88vh;
+            overflow-y: auto;
+            box-shadow: 0 28px 72px rgba(0,0,0,0.38);
+            animation: modal-in 0.2s cubic-bezier(.22,.68,0,1.2);
+        }
+        @keyframes modal-in {
+            from { transform: scale(0.88) translateY(12px); opacity: 0; }
+            to   { transform: scale(1)    translateY(0);    opacity: 1; }
+        }
+        .modal-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 14px 14px 0 0;
+            color: white;
+        }
+        .modal-cell-id {
+            font-family: monospace;
+            font-size: 15px;
+            font-weight: 800;
+            background: rgba(255,255,255,0.2);
+            padding: 4px 10px;
+            border-radius: 6px;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+        .modal-cell-name {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+        .modal-close {
+            cursor: pointer;
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.15);
+            border: 1.5px solid rgba(255,255,255,0.3);
+            color: white;
+            font-size: 14px;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.18s;
+            flex-shrink: 0;
+        }
+        .modal-close:hover { background: rgba(255,255,255,0.32); }
+        .modal-body { padding: 20px; }
+        .modal-section { margin-bottom: 18px; }
+        .modal-section-title {
+            font-size: 10px;
+            font-weight: 700;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.9px;
+            margin-bottom: 8px;
+        }
+        .modal-work-content {
+            background: #f8faff;
+            border: 1px solid #e0e7ff;
+            border-radius: 8px;
+            padding: 11px 16px;
+            font-size: 14px;
+            color: #1e293b;
+            font-weight: 500;
+            line-height: 1.6;
+        }
+        /* Pipeline flow */
+        .pipeline-flow {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            padding: 12px;
+            background: #fafafa;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+        }
+        .pipeline-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: center;
+            width: 100%;
+        }
+        .pipeline-arrow {
+            font-size: 20px;
+            color: #94a3b8;
+            line-height: 1;
+            user-select: none;
+        }
+        .dep-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+            border: 1.5px solid transparent;
+        }
+        .dep-chip:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.14); }
+        .chip-id {
+            font-family: monospace;
+            font-size: 10px;
+            font-weight: 800;
+            background: rgba(0,0,0,0.1);
+            padding: 1px 5px;
+            border-radius: 3px;
+        }
+        .dep-chip-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+        .dep-chip.upstream   { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
+        .dep-chip.current    { background: linear-gradient(135deg,#667eea,#764ba2); color: white; font-size: 13px; padding: 9px 18px; cursor: default; border-radius: 8px; font-weight: 700; }
+        .dep-chip.current .chip-id { background: rgba(255,255,255,0.22); font-size: 11px; }
+        .dep-chip.current:hover { transform: none; box-shadow: none; }
+        .dep-chip.downstream { background: #f0fdf4; color: #15803d; border-color: #86efac; }
+        .dep-chip.feedback   { background: #fff1f2; color: #be123c; border-color: #fca5a5; }
+        .dep-chip.feedback::before { content: '↩ '; }
+        .dep-chip.empty-dep  { background: #f1f5f9; color: #94a3b8; border-color: #e2e8f0; cursor: default; font-style: italic; }
+        .dep-chip.empty-dep:hover { transform: none; box-shadow: none; }
+
+        /* ── Workflow Definition section ── */
+        .modal-wf-goal {
+            background: #f0f9ff;
+            border-left: 3px solid #0ea5e9;
+            border-radius: 0 6px 6px 0;
+            padding: 9px 14px;
+            font-size: 12px;
+            color: #0c4a6e;
+            margin-bottom: 12px;
+            font-style: italic;
+            line-height: 1.5;
+        }
+        .modal-wf-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .modal-wf-col-title {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            margin-bottom: 6px;
+        }
+        .modal-wf-col.inputs  .modal-wf-col-title { color: #2563eb; }
+        .modal-wf-col.outputs .modal-wf-col-title { color: #15803d; }
+        .modal-wf-item {
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-bottom: 3px;
+            line-height: 1.4;
+        }
+        .modal-wf-col.inputs  .modal-wf-item { background: #eff6ff; color: #1e40af; }
+        .modal-wf-col.outputs .modal-wf-item { background: #f0fdf4; color: #166534; }
+        .modal-wf-activity {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            font-size: 11px;
+            color: #374151;
+            margin-bottom: 4px;
+        }
+        .modal-wf-step {
+            width: 18px; height: 18px;
+            background: #f59e0b;
+            color: white;
+            font-size: 9px;
+            font-weight: 800;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+        .modal-wf-criteria {
+            background: #faf5ff;
+            border: 1px solid #d8b4fe;
+            border-radius: 6px;
+            padding: 9px 12px;
+            font-size: 11px;
+            color: #4c1d95;
+            margin-top: 10px;
+        }
+        .modal-wf-criteria-lbl {
+            font-weight: 700;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            color: #7c3aed;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        /* ── 流程分解视图 ── */
+        .phase-group-header:hover td { filter: brightness(0.95); }
+        .phase-toggle { font-size: 11px; margin-right: 7px; display: inline-block; }
+        .proc-id-badge {
+            display: inline-block;
+            font-family: monospace;
+            font-size: 10px;
+            font-weight: 800;
+            background: rgba(0,0,0,0.13);
+            padding: 1px 6px;
+            border-radius: 3px;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        .proc-id-cell {
+            font-size: 11.5px;
+            color: #1e293b;
+            font-weight: 500;
+            background: #f8fafc !important;
+            white-space: nowrap;
+            min-width: 180px;
+        }
+        .role-coop-cell { vertical-align: top !important; min-width: 90px; }
+        .role-coop-cell.empty { background: #f1f5f9 !important; opacity: 0.5; }
+        .coop-action { font-size: 10px; color: #1e293b; line-height: 1.4; }
+        .proc-row:hover td { filter: brightness(0.97); }
+        /* cooperation modal section */
+        .coop-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+            gap: 8px;
+        }
+        .coop-role-card {
+            border-radius: 7px;
+            padding: 9px 11px;
+            border: 1.5px solid rgba(0,0,0,0.07);
+        }
+        .coop-role-card .card-role-name {
+            font-size: 10px;
+            font-weight: 700;
+            margin-bottom: 5px;
+            color: #374151;
+        }
+        .coop-role-card .card-role-action {
+            font-size: 11px;
+            color: #1e293b;
+            line-height: 1.4;
+        }
+        .coop-role-card.inactive {
+            background: #f1f5f9 !important;
+            opacity: 0.5;
+        }
+        .coop-role-card.inactive .card-role-action { font-style: italic; color: #9ca3af; }
+        .decomp-proc-label {
+            font-size: 11px;
+            font-style: italic;
+            color: #6b7280;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="matrix-container">
+        <!-- 左侧：多视图切换面板 -->
+        <div class="view-panel">
+            <div class="panel-header">📊 矩阵视图切换</div>
+            <div class="panel-content">
+                <div class="view-selector">
+                    <button class="view-btn active" onclick="switchView('matrix')">矩阵表格</button>
+                    <button class="view-btn" onclick="switchView('overlay')">能力层叠加</button>
+                    <button class="view-btn" onclick="switchView('feedback')">反馈回路</button>
+                    <button class="view-btn" onclick="switchView('decomp')">流程分解</button>
+                </div>
+                
+                <!-- 矩阵表格视图 -->
+                <div id="matrix-view" style="display: block;">
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #c8e6c9;"></div>
+                            <span>Phase（阶段）</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #bbdefb;"></div>
+                            <span>设计工程师</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #fff9c4;"></div>
+                            <span>工艺工程师</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #ffe0b2;"></div>
+                            <span>生产计划员</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #f8bbd0;"></div>
+                            <span>质量工程师</span>
+                        </div>
+                    </div>
+                    
+                    <table class="matrix-table" id="mainMatrix"></table>
+                </div>
+                
+                <!-- 能力层叠加视图 -->
+                <div id="overlay-view" style="display: none;">
+                    <div class="overlay-toolbar">
+                        <span>能力叠加层：</span>
+                        <button class="overlay-btn render" id="btn-render" onclick="toggleOverlay('render')">3D渲染</button>
+                        <button class="overlay-btn sim" id="btn-sim" onclick="toggleOverlay('sim')">数字仿真</button>
+                        <button class="overlay-btn twin" id="btn-twin" onclick="toggleOverlay('twin')">数字孪生</button>
+                    </div>
+                    <table class="matrix-table" id="overlayMatrix"></table>
+                </div>
+
+                <!-- 反馈回路视图 -->
+                <div id="feedback-view" style="display: none;">
+                    <div id="feedback-cards"></div>
+                </div>
+
+                <!-- 流程分解视图 -->
+                <div id="decomp-view" style="display: none;">
+                </div>
+            </div>
+        </div>
+        
+        <!-- 详情对话框 Dialog Modal -->
+        <div class="modal-overlay" id="detailModal" onclick="maybeCloseModal(event)">
+            <div class="modal-box">
+                <div class="modal-header">
+                    <span class="modal-cell-id" id="modalCellId"></span>
+                    <div class="modal-cell-name" id="modalCellName"></div>
+                    <button class="modal-close" onclick="closeModal()">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-section">
+                        <div class="modal-section-title">工作内容 · Work Content</div>
+                        <div class="modal-work-content" id="modalWorkContent"></div>
+                    </div>
+                    <div class="modal-section" id="modalWfSection" style="display:none;">
+                        <div class="modal-section-title">工作定义 · Workflow Definition</div>
+                        <div id="modalWorkflowDetail"></div>
+                    </div>
+                    <div class="modal-section" id="modalCoopSection" style="display:none;">
+                        <div class="modal-section-title">角色协作 · Role Cooperation</div>
+                        <div class="decomp-proc-label" id="modalCoopProcLabel"></div>
+                        <div id="modalCoopDetail"></div>
+                    </div>
+                    <div class="modal-section" id="modalPipelineSection">
+                        <div class="modal-section-title">业务流程 Pipeline &nbsp;—&nbsp; 上游依赖 → 当前节点 → 下游输出</div>
+                        <div class="pipeline-flow" id="modalPipeline"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 数据定义
+        const phases = [
+            { id: 1, name: 'Layer 1：CATIA设计模型', color: '#c8e6c9' },
+            { id: 2, name: 'Layer 2：工程数据提取', color: '#a5d6a7' },
+            { id: 3, name: 'Layer 3：制造工艺规划', color: '#81c784' },
+            { id: 4, name: 'Layer 4：装配工艺设计', color: '#66bb6a' },
+            { id: 5, name: 'Layer 5：SOP工作指令', color: '#4caf50' },
+            { id: 6, name: 'Layer 6：现场执行控制', color: '#43a047' },
+            { id: 7, name: 'Layer 7：交付与反馈', color: '#388e3c' }
+        ];
+
+        const roles = [
+            { id: 'DE', name: '🧑‍💼 设计工程师', color: '#bbdefb' },
+            { id: 'ENG', name: '📋 工艺工程师', color: '#fff9c4' },
+            { id: 'PLAN', name: '👷 生产计划员', color: '#ffe0b2' },
+            { id: 'QA', name: '👨‍⚕️ 质量工程师', color: '#f8bbd0' },
+            { id: 'OPS', name: '👨‍🔧 操作人员', color: '#c8e6c9' }
+        ];
+
+        const matrix_data = {
+            '1-DE': '三维模型<br/>设计',
+            '1-ENG': 'GD&T标注<br/>规范',
+            '1-PLAN': '可制造性评审',
+            '1-QA': '干涉检查',
+            '1-OPS': '',
+            
+            '2-DE': '设计评审<br/>工程图',
+            '2-ENG': 'BOM生成<br/>采购BOM',
+            '2-PLAN': 'BOM整理<br/>供应链',
+            '2-QA': '检验标准<br/>质量评审',
+            '2-OPS': '',
+            
+            '3-DE': '工艺可行性<br/>DFM评审',
+            '3-ENG': '工艺路线<br/>工艺卡',
+            '3-PLAN': '采购计划<br/>进度表',
+            '3-QA': '质量计划<br/>入厂检验',
+            '3-OPS': '',
+            
+            '4-DE': '关键零件<br/>工程答疑',
+            '4-ENG': '装配规范<br/>紧固清单',
+            '4-PLAN': '工位设计<br/>物料计划',
+            '4-QA': '检验计划<br/>KCP定义',
+            '4-OPS': '',
+            
+            '5-DE': '',
+            '5-ENG': 'SOP编制<br/>工作指令',
+            '5-PLAN': '物料齐套<br/>计划确认',
+            '5-QA': '验收标准<br/>旅行单',
+            '5-OPS': '培训资料<br/>AR手册',
+            
+            '6-DE': 'ECO评估<br/>DPR签发',
+            '6-ENG': '工艺异常<br/>现场处置',
+            '6-PLAN': '班前准备<br/>工具检验',
+            '6-QA': '工序检验<br/>不合格处理',
+            '6-OPS': '逐步装配<br/>紧固记录',
+            
+            '7-DE': '设计复盘<br/>经验库更新',
+            '7-ENG': '工艺改进',
+            '7-PLAN': '产能复盘<br/>节拍数据',
+            '7-QA': '最终检验<br/>CoC证书',
+            '7-OPS': '交付记录<br/>序列号'
+        };
+
+        // 初始化矩阵表格
+        function initMatrix() {
+            const matrix = document.getElementById('mainMatrix');
+            let html = '<thead><tr><th>Phase / Role</th>';
+            roles.forEach(role => { html += `<th>${role.name}</th>`; });
+            html += '</tr></thead><tbody>';
+            phases.forEach(phase => {
+                html += `<tr><td style="background: ${phase.color}; font-weight: 600;">${phase.name}</td>`;
+                roles.forEach(role => {
+                    const content = matrix_data[`${phase.id}-${role.id}`] || '';
+                    const bgColor = role.color;
+                    html += `<td style="background: ${bgColor};" class="cell-click" data-phase="${phase.id}" data-role="${role.id}" data-content="${content}"><div class="cell-id-label">L${phase.id}-${role.id}</div><div class="cell-content">${content}</div></td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody>';
+            matrix.innerHTML = html;
+            document.querySelectorAll('.cell-click').forEach(cell => {
+                cell.onclick = (e) => showDetail(e);
+            });
+        }
+
+        // ── 业务流程 Pipeline 依赖数据 ──
+        const pipeline_deps = {
+            '1-DE':   { inputs: [],                              outputs: ['1-ENG','1-PLAN','1-QA','2-DE'] },
+            '1-ENG':  { inputs: ['1-DE'],                        outputs: ['1-PLAN','1-QA','2-ENG','3-ENG'] },
+            '1-PLAN': { inputs: ['1-DE','1-ENG'],                outputs: ['2-PLAN','3-PLAN'] },
+            '1-QA':   { inputs: ['1-DE','1-ENG'],                outputs: ['2-QA'] },
+            '1-OPS':  { inputs: [],                              outputs: [] },
+            '2-DE':   { inputs: ['1-DE'],                        outputs: ['3-DE','4-DE'] },
+            '2-ENG':  { inputs: ['1-ENG','2-DE'],                outputs: ['2-PLAN','2-QA','3-ENG'] },
+            '2-PLAN': { inputs: ['1-PLAN','2-ENG'],              outputs: ['3-PLAN','4-PLAN'] },
+            '2-QA':   { inputs: ['1-QA','2-ENG'],                outputs: ['3-QA','4-QA'] },
+            '2-OPS':  { inputs: [],                              outputs: [] },
+            '3-DE':   { inputs: ['2-DE','3-ENG'],                outputs: ['4-DE'] },
+            '3-ENG':  { inputs: ['1-ENG','2-ENG'],               outputs: ['4-ENG','5-ENG'] },
+            '3-PLAN': { inputs: ['1-PLAN','2-PLAN'],             outputs: ['4-PLAN'] },
+            '3-QA':   { inputs: ['2-QA'],                        outputs: ['4-QA','5-QA'] },
+            '3-OPS':  { inputs: [],                              outputs: [] },
+            '4-DE':   { inputs: ['2-DE','3-DE'],                 outputs: ['6-DE'] },
+            '4-ENG':  { inputs: ['3-ENG'],                       outputs: ['4-QA','5-ENG'] },
+            '4-PLAN': { inputs: ['2-PLAN','3-PLAN'],             outputs: ['5-PLAN','6-PLAN'] },
+            '4-QA':   { inputs: ['3-QA','4-ENG'],                outputs: ['5-QA','6-QA'] },
+            '4-OPS':  { inputs: [],                              outputs: [] },
+            '5-DE':   { inputs: [],                              outputs: [] },
+            '5-ENG':  { inputs: ['3-ENG','4-ENG'],               outputs: ['5-OPS','6-ENG','6-OPS'] },
+            '5-PLAN': { inputs: ['4-PLAN'],                      outputs: ['6-PLAN'] },
+            '5-QA':   { inputs: ['3-QA','4-QA'],                 outputs: ['6-QA','7-QA'] },
+            '5-OPS':  { inputs: ['5-ENG'],                       outputs: ['6-OPS'] },
+            '6-DE':   { inputs: ['4-DE','6-QA'],                 outputs: ['1-DE'] },
+            '6-ENG':  { inputs: ['5-ENG','6-OPS'],               outputs: ['7-ENG','3-ENG'] },
+            '6-PLAN': { inputs: ['4-PLAN','5-PLAN'],             outputs: ['6-OPS'] },
+            '6-QA':   { inputs: ['4-QA','5-QA','6-OPS'],         outputs: ['6-DE','7-QA'] },
+            '6-OPS':  { inputs: ['5-OPS','5-ENG','6-PLAN'],      outputs: ['6-QA','7-OPS'] },
+            '7-DE':   { inputs: ['6-DE'],                        outputs: [] },
+            '7-ENG':  { inputs: ['6-ENG'],                       outputs: ['5-ENG'] },
+            '7-PLAN': { inputs: ['6-PLAN','6-OPS'],              outputs: [] },
+            '7-QA':   { inputs: ['5-QA','6-QA'],                 outputs: ['3-QA'] },
+            '7-OPS':  { inputs: ['6-OPS','7-QA'],                outputs: [] }
+        };
+
+        // ── 工作定义数据 ──
+        const workflow_data = {
+            '1-DE': { goal:'创建符合适航标准的CATIA三维参数化模型，建立设计数据源头', inputs:['客户技术规范书 (SOR)','适航规章 (FAR/EASA)','以往型号经验库'], activities:['CATIA三维建模与参数化设计','三维PMI/GD&T标注','装配体关系定义','模型检查与冻结入库'], outputs:['CATIA CATPart / CATProduct 文件','三维BOM初版','PDM/PLM发布记录'], criteria:'模型通过内部设计评审，无建模错误，PMI完整，冻结版本入库' },
+            '1-ENG': { goal:'基于三维模型定义关键制造特征与公差，确保图纸可制造且满足质量要求', inputs:['三维模型 L1-DE','制造工艺标准','GD&T标准 (ASME Y14.5)'], activities:['关键特性 (KCP) 识别与分级','公差分析 (RSS/最坏情形)','PMI标注审核','制造特征标注'], outputs:['带PMI标注的三维模型','关键特性清单 (KCP List)','公差分析报告'], criteria:'所有KCP有明确公差值，工艺工程师确认可测量可加工' },
+            '1-PLAN': { goal:'从供应链与产能视角评估设计方案的可制造性与交货风险', inputs:['三维模型 L1-DE','GD&T规范 L1-ENG','供应商能力数据库'], activities:['可制造性(DFM)初步分析','特殊工艺/材料识别','供货周期风险评估','Make-or-Buy分析'], outputs:['可制造性评审报告','采购风险清单','Make-or-Buy决策表'], criteria:'评审报告签批，无阻断性风险，长周期项已提前启动采购' },
+            '1-QA': { goal:'验证装配体无几何干涉，从质量角度确认设计完整性', inputs:['三维模型 L1-DE','GD&T规范 L1-ENG'], activities:['CATIA DMU干涉检查','装配运动仿真','问题单记录与跟踪','设计质量门控审查'], outputs:['干涉检查报告','设计问题清单 (DQL)','质量门控签批记录'], criteria:'零干涉，所有设计问题有书面闭环，质量门控通过' },
+            '2-DE': { goal:'完成正式设计评审，将三维模型转化为受控的工程图和技术规范', inputs:['三维模型 L1-DE','干涉检查报告 L1-QA','客户评审意见'], activities:['跨职能设计评审(CDR)','工程图发布与版本控制','技术规范文件化','TDP技术数据包编制'], outputs:['正式工程图 (EBOM)','技术规范书 (TS)','技术数据包 (TDP)'], criteria:'设计评审通过，工程图正式受控发布，无A类问题遗留' },
+            '2-ENG': { goal:'基于工程图将设计BOM转化为制造BOM，明确所有件的制造来源', inputs:['工程图 L2-DE','GD&T规范 L1-ENG','工艺能力数据'], activities:['EBOM→MBOM结构转换','自制/采购件分类','BOM层级与版本管理','采购BOM生成'], outputs:['制造BOM (MBOM)','采购BOM (PBOM)','BOM差异分析报告'], criteria:'MBOM完整准确，所有件有制造来源定义，经工程签批' },
+            '2-PLAN': { goal:'基于MBOM制定采购计划，锁定供应链资源与交期', inputs:['MBOM L2-ENG','采购风险清单 L1-PLAN','主生产计划 (MPS)'], activities:['供应商选择与询价','采购订单 (PO) 建立','交期管理与跟踪','MRP运算与物料需求发布'], outputs:['采购订单 (PO)','供应链资源清单','物料需求计划 (MRP)'], criteria:'所有物料有采购订单，交期与生产计划对齐，无缺料风险' },
+            '2-QA': { goal:'制定零件与装配体的检验标准，建立质量接受准则', inputs:['工程图 L2-DE','干涉检查报告 L1-QA','适航质量标准'], activities:['检验要求分析','引用IPC/AS9100标准','检验方法定义','接受准则文件化'], outputs:['检验标准文件 (ISP)','零件接受准则','量具/测量方案清单'], criteria:'检验标准文件化可执行，所有KCP有对应检验方法' },
+            '3-DE': { goal:'评估制造工艺可行性，发现并消除可制造性障碍', inputs:['工程图 L2-DE','工艺路线 L3-ENG','制造偏差历史数据'], activities:['DFM深度分析','公差与工艺能力对比 (Cpk)','装配顺序可行性验证','设计改善建议提出'], outputs:['DFM评审报告','设计更改建议书 (RFE)','Cpk预分析报告'], criteria:'所有DFM阻断项有设计变更或偏差申请闭环' },
+            '3-ENG': { goal:'规划完整的制造工艺路线，编制可执行的工艺卡', inputs:['MBOM L2-ENG','GD&T规范 L1-ENG','设备能力数据'], activities:['工艺分解与工序设计','工艺参数确定','工装夹具规划','工艺卡 (AO/FO) 编制'], outputs:['工艺路线图','工艺卡 (AO/FO)','工装夹具需求清单'], criteria:'工艺卡覆盖所有工序，经工艺评审会批准，工装确保到位' },
+            '3-PLAN': { goal:'制定详细生产计划与采购进度，识别并管控关键路径', inputs:['MBOM L2-ENG','采购订单 L2-PLAN','工厂产能数据'], activities:['主生产计划(MPS)细化','关键路径分析(CPM)','资源负荷平衡','进度甘特图发布'], outputs:['主生产计划 (MPS)','进度甘特图','资源负荷分析报告'], criteria:'计划通过评审，关键路径有缓冲，资源无严重冲突' },
+            '3-QA': { goal:'建立质量管理计划与入厂检验体系，提前控制来料质量', inputs:['检验标准 L2-QA','供应商清单 L2-PLAN'], activities:['PFMEA编制','控制计划 (Control Plan) 制定','入厂检验规程编写','MSA测量系统分析'], outputs:['质量管理计划 (QMP)','入厂检验规程 (IQC)','PFMEA文件','控制计划'], criteria:'PFMEA覆盖≥95%风险项，入厂检验规程可执行，MSA合格' },
+            '4-DE': { goal:'及时响应工艺设计阶段的技术问题，确保设计意图准确传递', inputs:['工艺卡 L3-ENG','DFM报告 L3-DE','装配规范 L4-ENG'], activities:['技术问题受理与答疑','关键尺寸与公差解释','DPR偏差申请预评估','技术备忘录 (TM) 发布'], outputs:['工程答疑记录','技术说明备忘录 (TM)','DPR预评估意见'], criteria:'所有工艺技术问题72h内有书面回复，无遗漏' },
+            '4-ENG': { goal:'编制装配接口规范与紧固件清单，指导装配工艺设计', inputs:['工艺路线 L3-ENG','工程图 L2-DE','技术答疑记录 L4-DE'], activities:['装配顺序设计与优化','接口管理规范编制','紧固件选型与力矩定义','装配工艺仿真验证'], outputs:['装配工艺规范 (AOS)','紧固件材料清单 (FBL)','力矩要求清单','装配仿真报告'], criteria:'AOS经工程与质量批准，FBL 100%齐套，扭矩值经验证' },
+            '4-PLAN': { goal:'规划装配工位布局与物料配送计划，保障生产准备就绪', inputs:['工艺路线 L3-ENG','进度计划 L3-PLAN','工厂布局图'], activities:['工位布局设计与审批','工具仪器清单编制','物料JIT配送计划','ERP物料计划录入'], outputs:['工位布局图(批准版)','工具仪器清单','物料配送计划 (JIT)','ERP物料计划单'], criteria:'布局通过安全与效率审批，物料计划与进度对齐，工具到位' },
+            '4-QA': { goal:'定义关键检验控制点(KCP)与工序检验计划，嵌入质量控制', inputs:['装配规范 L4-ENG','质量计划 L3-QA','检验标准 L2-QA'], activities:['KCP识别与分级 (A/B/C类)','工序检验点定义','旅行单 (Traveler) 设计','检具清单编制'], outputs:['关键特性清单 (KCP)','工序检验计划','工件旅行单模板','检具需求清单'], criteria:'所有A类KCP有量化检验标准，旅行单覆盖全工序，检具到位' },
+            '5-ENG': { goal:'编制操作层面SOP工作指令，使操作人员无需工艺背景即可正确执行', inputs:['装配规范 L4-ENG','力矩清单 L4-ENG','旅行单模板 L4-QA'], activities:['工步级SOP编写','AR/VR操作手册制作','操作培训视频录制','试读验证 (dry run)'], outputs:['SOP工作包 (Work Package)','AR操作手册','操作培训视频','SOP版本控制记录'], criteria:'操作人员盲读通过率≥95%，无歧义步骤，培训记录完整' },
+            '5-PLAN': { goal:'确认装配所需物料100%齐套，班次计划正式锁定', inputs:['物料配送计划 L4-PLAN','ERP物料状态数据'], activities:['物料到位状态核查 (BOM对比)','工具齐套确认','班次计划冻结发布','缺料应急处理'], outputs:['物料齐套确认单 (Kit List)','锁定班次计划','缺料应急处置记录'], criteria:'物料齐套率达到100%，计划正式冻结，工具100%在位' },
+            '5-QA': { goal:'制定工序验收标准，发布带KCP节点的工件旅行单', inputs:['工序检验计划 L4-QA','工程图 L2-DE','KCP清单 L4-QA'], activities:['工序验收准则编写','旅行单KCP嵌入','检验记录表格设计','一次通过率目标设定'], outputs:['工序验收标准书 (ACS)','工件旅行单(含KCP节点)','检验记录表格'], criteria:'旅行单覆盖全部KCP，标准可量化可追溯，发布版本受控' },
+            '5-OPS': { goal:'理解SOP并获得技能认证，做好上线准备', inputs:['SOP工作包 L5-ENG','AR操作手册 L5-ENG'], activities:['SOP培训(课堂+实操)','AR手册上机学习','技能评估与考核','特种作业资质确认'], outputs:['培训签到记录','技能认证合格证','特种资质确认清单'], criteria:'技能考核合格率100%，特种资质100%有效，方可上线操作' },
+            '6-DE': { goal:'评估现场超差与设计问题，签发工程变更令或偏差申请', inputs:['不合格报告 NCR L6-QA','工艺异常处置单 L6-ENG','ECO历史数据'], activities:['技术可用性评估','ECO工程变更令起草','DPR偏差申请审批','设计适用性确认'], outputs:['ECO工程变更令','DPR偏差申请(批准)','技术评估报告'], criteria:'所有超差在72h内有DPR/ECO决定，无悬挂技术问题' },
+            '6-ENG': { goal:'快速处理现场工艺异常，保障生产在正确工艺下连续运行', inputs:['操作异常记录 L6-OPS','SOP工作包 L5-ENG','工艺卡 L3-ENG'], activities:['现场异常评估与分析','临时工艺方案 (TDO) 发布','现场技术支持','异常根因记录'], outputs:['工艺异常处置单','临时偏离指令 (TDO)','根因分析记录'], criteria:'异常响应时间≤4h，生产不中断，根因记录纳入改进库' },
+            '6-PLAN': { goal:'确认班次准备就绪，工具设备完好，保障准时开工', inputs:['齐套确认单 L5-PLAN','物料配送计划 L4-PLAN','班次计划'], activities:['班前会(安全+任务)','工具校准状态检查','物料到位二次确认','工位清洁与5S检查'], outputs:['班前检查记录','工具校准确认单','工位准备完成报告'], criteria:'工具100%在校准期内，物料全到位，班前会记录完整' },
+            '6-QA': { goal:'执行工序检验，控制质量逃逸，确保不合格品不流转', inputs:['工序检验计划 L4-QA','工件旅行单 L5-QA','验收标准 L5-QA'], activities:['KCP逐点检验(100%)','不合格品隔离与标识','不合格报告 (NCR) 开具','MRB不合格品评审'], outputs:['旅行单检验签署','不合格报告 (NCR)','MRB评审记录'], criteria:'KCP 100%检验完成，NCR当日开具当日隔离，无质量逃逸' },
+            '6-OPS': { goal:'按SOP正确逐步执行装配操作，完整记录紧固和工步信息', inputs:['SOP工作包 L5-ENG','工件旅行单 L5-QA','班前确认记录 L6-PLAN'], activities:['按SOP工步逐步装配','力矩扳手紧固与记录','序列号扫描追踪','旅行单工步签署'], outputs:['装配工件(合格)','紧固记录表','已签署旅行单','装配过程照片/视频'], criteria:'旅行单全工步签署完成，紧固记录无遗漏，工件转入检验' },
+            '7-DE': { goal:'总结本批次设计问题，更新知识库，防止同类问题重复出现', inputs:['ECO变更令 L6-DE','工艺改进建议 L7-ENG','DPR历史记录'], activities:['设计偏差根因汇总分析','设计规范修订','知识库 (Lessons Learned) 更新','下批次设计改进计划'], outputs:['设计经验记录 (Lessons Learned)','修订的设计规范','下批次设计改进计划'], criteria:'所有本批次ECO有根因分析，经验库更新，知识库入库' },
+            '7-ENG': { goal:'基于现场反馈系统性改进工艺，更新技术文件纳入下批次生产', inputs:['工艺异常处置单 L6-ENG','最终检验记录 L7-QA','一次通过率数据'], activities:['工艺问题汇总与RCCA','工艺改进措施制定','工艺卡/SOP新版本发布','改进效果验证计划'], outputs:['工艺改进报告','更新版工艺卡(新版本)','下批次SOP变更通知'], criteria:'改进措施有量化目标，纳入下批次SOP，技术文件版本更新' },
+            '7-PLAN': { goal:'复盘生产节拍与产能效率，为下批次计划优化提供数据依据', inputs:['装配过程记录 L6-OPS','班前检查记录 L6-PLAN','ERP生产数据'], activities:['工时与节拍数据统计','瓶颈工序识别','OEE分析','产能改善方案提出'], outputs:['节拍分析报告','OEE报告','瓶颈识别清单','下批次产能优化计划'], criteria:'关键工序节拍数据完整，改善方案有量化目标，移交下批次计划' },
+            '7-QA': { goal:'执行最终合格检验并签发适航符合性证明(CoC)，确保交付合规', inputs:['已签署旅行单 L6-QA','验收标准 L5-QA','适航要求文件'], activities:['MRB终态检查','最终尺寸与外观检验','文件包完整性检查','CoC合格证签发'], outputs:['最终检验报告','合格证 (CoC)','完整质量记录包'], criteria:'所有KCP 100%合格，文件包完整，CoC签发，无遗留项' },
+            '7-OPS': { goal:'完成工件移交准备，生成完整的可追溯交付记录', inputs:['CoC合格证 L7-QA','紧固记录 L6-OPS','序列号台账'], activities:['工件清洁与防护处理','序列号完整性核对','交付文件包整理打包','工件移交签署'], outputs:['交付记录 (Delivery Note)','工件追踪卡(含序列号)','完整交付文件包'], criteria:'序列号100%可追溯，交付文件包签署完整，工件防护合格' }
+        };
+
+        // 显示详情（对话框）
+        function showDetail(e) {
+            const phaseId = e.currentTarget.dataset.phase;
+            const roleId  = e.currentTarget.dataset.role;
+            const key     = `${phaseId}-${roleId}`;
+            const content = matrix_data[key] || '';
+            if (!content) return;
+            // reset coop-specific sections, restore pipeline section
+            document.getElementById('modalCoopSection').style.display = 'none';
+            document.getElementById('modalPipelineSection').style.display = 'block';
+            const phaseObj = phases.find(p => p.id == phaseId);
+            const roleObj  = roles.find(r => r.id === roleId);
+            const cellId   = `L${phaseId}-${roleId}`;
+
+            document.getElementById('modalCellId').textContent   = cellId;
+            document.getElementById('modalCellName').textContent =
+                `${phaseObj.name.split('：')[1]}  ·  ${roleObj.name.replace(/^[^\s]+\s/, '')}`;
+            document.getElementById('modalWorkContent').innerHTML =
+                content.replace(/<br\/?>/g, '&nbsp;&nbsp;/&nbsp;&nbsp;');
+
+            // Workflow definition
+            const wf = workflow_data[key];
+            const wfSection = document.getElementById('modalWfSection');
+            const wfEl = document.getElementById('modalWorkflowDetail');
+            if (wf) {
+                wfSection.style.display = 'block';
+                wfEl.innerHTML = `
+                    <div class="modal-wf-goal">${wf.goal}</div>
+                    <div class="modal-wf-grid">
+                        <div class="modal-wf-col inputs">
+                            <div class="modal-wf-col-title">输入文件 / Inputs</div>
+                            ${wf.inputs.map(i => `<div class="modal-wf-item">${i}</div>`).join('')}
+                        </div>
+                        <div class="modal-wf-col outputs">
+                            <div class="modal-wf-col-title">交付物 / Outputs</div>
+                            ${wf.outputs.map(o => `<div class="modal-wf-item">${o}</div>`).join('')}
+                        </div>
+                    </div>
+                    <div class="modal-wf-col activities">
+                        <div class="modal-wf-col-title">关键活动 / Key Activities</div>
+                        ${wf.activities.map((a, i) => `<div class="modal-wf-activity"><span class="modal-wf-step">${i+1}</span>${a}</div>`).join('')}
+                    </div>
+                    <div class="modal-wf-criteria">
+                        <span class="modal-wf-criteria-lbl">完成标准 / Done Criteria</span>
+                        ${wf.criteria}
+                    </div>`;
+            } else {
+                wfSection.style.display = 'none';
+            }
+
+            const dep = pipeline_deps[key] || { inputs: [], outputs: [] };
+            const pipelineEl = document.getElementById('modalPipeline');
+            pipelineEl.innerHTML = '';
+
+            function makeChip(depKey, cssClass) {
+                const parts  = depKey.split('-');
+                const pId    = parts[0];
+                const rId    = parts.slice(1).join('-');
+                const cId    = `L${pId}-${rId}`;
+                const cLabel = (matrix_data[depKey] || depKey).replace(/<br\/?>/g, ' / ');
+                const chip   = document.createElement('span');
+                chip.className = `dep-chip ${cssClass}`;
+                chip.innerHTML = `<span class="chip-id">${cId}</span><span class="dep-chip-label">${cLabel}</span>`;
+                if (!cssClass.includes('empty-dep')) chip.onclick = () => jumpToCell(depKey);
+                return chip;
+            }
+
+            const upRow = document.createElement('div');
+            upRow.className = 'pipeline-row';
+            if (dep.inputs.length === 0) {
+                const c = document.createElement('span');
+                c.className = 'dep-chip empty-dep';
+                c.innerHTML = '<span class="dep-chip-label">起点 — 无上游依赖</span>';
+                upRow.appendChild(c);
+            } else {
+                dep.inputs.forEach(k => upRow.appendChild(makeChip(k, 'upstream')));
+            }
+            pipelineEl.appendChild(upRow);
+
+            const arr1 = document.createElement('div');
+            arr1.className = 'pipeline-arrow'; arr1.textContent = '↓';
+            pipelineEl.appendChild(arr1);
+
+            const curRow = document.createElement('div');
+            curRow.className = 'pipeline-row';
+            const curChip = document.createElement('span');
+            curChip.className = 'dep-chip current';
+            curChip.innerHTML = `<span class="chip-id">${cellId}</span><span class="dep-chip-label">${content.replace(/<br\/?>/g, ' / ')}</span>`;
+            curRow.appendChild(curChip);
+            pipelineEl.appendChild(curRow);
+
+            const arr2 = document.createElement('div');
+            arr2.className = 'pipeline-arrow'; arr2.textContent = '↓';
+            pipelineEl.appendChild(arr2);
+
+            const downRow = document.createElement('div');
+            downRow.className = 'pipeline-row';
+            if (dep.outputs.length === 0) {
+                const c = document.createElement('span');
+                c.className = 'dep-chip empty-dep';
+                c.innerHTML = '<span class="dep-chip-label">终点 — 无下游输出</span>';
+                downRow.appendChild(c);
+            } else {
+                dep.outputs.forEach(k => {
+                    const isBack = parseInt(k.split('-')[0]) < parseInt(phaseId);
+                    downRow.appendChild(makeChip(k, isBack ? 'feedback' : 'downstream'));
+                });
+            }
+            pipelineEl.appendChild(downRow);
+
+            document.getElementById('detailModal').classList.add('open');
+        }
+
+        function closeModal() {
+            document.getElementById('detailModal').classList.remove('open');
+        }
+
+        function maybeCloseModal(e) {
+            if (e.target.id === 'detailModal') closeModal();
+        }
+
+        function jumpToCell(key) {
+            const parts   = key.split('-');
+            const phaseId = parts[0];
+            const roleId  = parts.slice(1).join('-');
+            showDetail({ currentTarget: { dataset: { phase: phaseId, role: roleId } } });
+        }
+
+        // 视图切换
+        function switchView(view) {
+            const views = ['matrix', 'overlay', 'feedback', 'decomp'];
+            views.forEach(v => {
+                document.getElementById(`${v}-view`).style.display = v === view ? 'block' : 'none';
+            });
+            document.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            if (view === 'overlay') renderOverlayMatrix();
+            if (view === 'decomp') initDecomposition();
+        }
+
+        // ── 能力叠加层 ─────────────────────────────────
+        const overlay_data = {
+            render: new Set(['1-DE','1-QA','2-DE','3-ENG','4-ENG','4-QA','5-ENG','5-OPS','6-OPS','6-QA','7-ENG']),
+            sim:    new Set(['1-DE','1-QA','1-PLAN','3-ENG','3-QA','4-ENG','4-PLAN','6-PLAN','7-ENG']),
+            twin:   new Set(['6-QA','6-OPS','7-ENG','7-QA'])
+        };
+        const active_overlays = new Set();
+
+        function toggleOverlay(layer) {
+            if (active_overlays.has(layer)) {
+                active_overlays.delete(layer);
+                document.getElementById(`btn-${layer}`).classList.remove('on');
+            } else {
+                active_overlays.add(layer);
+                document.getElementById(`btn-${layer}`).classList.add('on');
+            }
+            renderOverlayMatrix();
+        }
+
+        function renderOverlayMatrix() {
+            const matrix = document.getElementById('overlayMatrix');
+            let html = '<thead><tr><th>Phase / Role</th>';
+            roles.forEach(role => { html += `<th>${role.name}</th>`; });
+            html += '</tr></thead><tbody>';
+
+            phases.forEach(phase => {
+                html += `<tr><td style="background: ${phase.color}; font-weight: 600;">${phase.name}</td>`;
+                roles.forEach(role => {
+                    const key = `${phase.id}-${role.id}`;
+                    const content = matrix_data[key] || '';
+                    let classes = 'cell-click';
+                    let badges = '';
+                    const hasRender = active_overlays.has('render') && overlay_data.render.has(key);
+                    const hasSim    = active_overlays.has('sim')    && overlay_data.sim.has(key);
+                    const hasTwin   = active_overlays.has('twin')   && overlay_data.twin.has(key);
+                    if (hasRender) { classes += ' cell-render-on'; badges += '<span class="capability-badge badge-render">渲染</span>'; }
+                    if (hasSim)    { classes += ' cell-sim-on';    badges += '<span class="capability-badge badge-sim">仿真</span>'; }
+                    if (hasTwin)   { classes += ' cell-twin-on';   badges += '<span class="capability-badge badge-twin">孪生</span>'; }
+                    html += `<td class="${classes}" style="background: ${role.color};" data-phase="${phase.id}" data-role="${role.id}" data-content="${content}"><div class="cell-id-label">L${phase.id}-${role.id}</div><div class="cell-content">${content}${badges ? '<br/>' + badges : ''}</div></td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody>';
+            matrix.innerHTML = html;
+            document.querySelectorAll('#overlayMatrix .cell-click').forEach(cell => {
+                cell.onclick = (e) => showDetail(e);
+            });
+        }
+
+        // ── 流程分解数据 ─────────────────────────────────
+        const phase_procedures = {
+            1: { name:'CATIA设计模型', color:'#c8e6c9', procs:[
+                { id:'1.1', name:'需求基线与构型管理', roles:{ DE:'分析SOR，建立设计基线与构型树', ENG:'识别制造约束与特殊工艺要求', PLAN:'Make-or-Buy初步分析', QA:'确认适航符合性要求', OPS:'' }},
+                { id:'1.2', name:'三维参数化建模', roles:{ DE:'CATIA建模、装配体关系定义', ENG:'关键制造特征识别', PLAN:'', QA:'', OPS:'' }},
+                { id:'1.3', name:'公差分析与GD&T标注', roles:{ DE:'公差设计与PMI发布', ENG:'公差可制造性验证(Cpk预估)', PLAN:'', QA:'测量方案与MSA规划', OPS:'' }},
+                { id:'1.4', name:'装配干涉检查(DMU)', roles:{ DE:'DMU模型维护与问题闭环', ENG:'工艺视角装配顺序复核', PLAN:'', QA:'干涉检查执行与DQL开具', OPS:'' }}
+            ]},
+            2: { name:'工程数据提取', color:'#a5d6a7', procs:[
+                { id:'2.1', name:'正式设计评审(CDR)', roles:{ DE:'主持CDR，发布受控TDP', ENG:'工艺可行性意见确认', PLAN:'供应链交期评审', QA:'质量门控签批', OPS:'' }},
+                { id:'2.2', name:'BOM结构转换(EBOM→MBOM)', roles:{ DE:'EBOM维护与版本控制', ENG:'EBOM→MBOM拆解转换', PLAN:'采购BOM(PBOM)整理', QA:'BOM差异审核', OPS:'' }},
+                { id:'2.3', name:'检验标准与ISP制定', roles:{ DE:'关键尺寸公差确认', ENG:'制造检验方法定义', PLAN:'', QA:'ISP检验标准文件化', OPS:'' }},
+                { id:'2.4', name:'供应链计划启动', roles:{ DE:'', ENG:'长周期工艺件识别', PLAN:'MRP运算，发布采购订单', QA:'供应商质量资质评估', OPS:'' }}
+            ]},
+            3: { name:'制造工艺规划', color:'#81c784', procs:[
+                { id:'3.1', name:'DFM可制造性分析', roles:{ DE:'DFM意见接收与设计变更评估', ENG:'DFM分析执行', PLAN:'加工与采购周期影响评估', QA:'Cpk能力预分析', OPS:'' }},
+                { id:'3.2', name:'工艺路线与工艺卡编制', roles:{ DE:'工程技术答疑', ENG:'工序分解与AO/FO工艺卡编制', PLAN:'设备资源负荷分析', QA:'PFMEA与控制计划编制', OPS:'' }},
+                { id:'3.3', name:'主生产计划制定', roles:{ DE:'', ENG:'工时定额与节拍确认', PLAN:'MPS+CPM关键路径分析，甘特图发布', QA:'检验资源排期', OPS:'' }},
+                { id:'3.4', name:'入厂/质量管理计划', roles:{ DE:'', ENG:'工艺文件审核支持', PLAN:'入厂检验批次计划排期', QA:'QMP+IQC规程发布', OPS:'' }}
+            ]},
+            4: { name:'装配工艺设计', color:'#66bb6a', procs:[
+                { id:'4.1', name:'装配顺序设计与仿真', roles:{ DE:'关键零件接口答疑', ENG:'装配顺序建模与CATIA仿真', PLAN:'工位节拍平衡分析', QA:'KCP嵌入检查节点定义', OPS:'' }},
+                { id:'4.2', name:'工装夹具设计与验收', roles:{ DE:'工装接触界面尺寸确认', ENG:'工装方案设计与验收测试', PLAN:'工装采购与到位跟踪', QA:'工装精度与重复性验证', OPS:'' }},
+                { id:'4.3', name:'工位布局与物料规划', roles:{ DE:'', ENG:'工位工艺流与人机工效规划', PLAN:'物料JIT配送设计，工位布局审批', QA:'工位安全与人机工程审查', OPS:'' }},
+                { id:'4.4', name:'旅行单与AOS发布', roles:{ DE:'ECO变更对工艺影响预评估', ENG:'AOS装配规范与FBL紧固清单发布', PLAN:'', QA:'旅行单KCP节点定义与签批', OPS:'' }}
+            ]},
+            5: { name:'SOP工作指令', color:'#4caf50', procs:[
+                { id:'5.1', name:'SOP工作包编制与验证', roles:{ DE:'', ENG:'工步级SOP撰写+AR手册制作', PLAN:'', QA:'SOP可执行性审核与批准', OPS:'Dry-run试读验证，反馈歧义' }},
+                { id:'5.2', name:'操作培训与资质认证', roles:{ DE:'', ENG:'培训技术内容审定', PLAN:'培训班次与场地排期', QA:'特种作业资质核验', OPS:'上岗技能考核，获证上岗' }},
+                { id:'5.3', name:'物料齐套确认', roles:{ DE:'', ENG:'', PLAN:'Kit List物料逐项核查，计划冻结', QA:'来料入厂状态与批次确认', OPS:'领料核对确认' }},
+                { id:'5.4', name:'验收标准与旅行单发布', roles:{ DE:'', ENG:'工序验收准则技术确认', PLAN:'', QA:'ACS验收标准+旅行单正式发布', OPS:'' }}
+            ]},
+            6: { name:'现场执行控制', color:'#43a047', procs:[
+                { id:'6.1', name:'班前准备与开工确认', roles:{ DE:'', ENG:'', PLAN:'主持班前会(安全+任务)，5S检查', QA:'工具校准状态核验', OPS:'领料确认，安全装备检查' }},
+                { id:'6.2', name:'装配执行与数据记录', roles:{ DE:'ECO设计现场支持', ENG:'工艺规范现场技术指导', PLAN:'物料进度实时跟踪', QA:'KCP逐点抽检与签署', OPS:'按SOP工步逐步执行，力矩记录，旅行单签署' }},
+                { id:'6.3', name:'工序检验与NCR处理', roles:{ DE:'', ENG:'工艺异常TDO临时处置方案', PLAN:'不合格对进度影响评估', QA:'NCR开具与不合格品隔离', OPS:'配合返工或等待MRB决定' }},
+                { id:'6.4', name:'超差处置与根因追溯', roles:{ DE:'DPR偏差评估与ECO决策', ENG:'根因分析(5Why)与技术报告', PLAN:'进度影响与资源调配', QA:'MRB评审与关闭', OPS:'' }}
+            ]},
+            7: { name:'交付与反馈', color:'#388e3c', procs:[
+                { id:'7.1', name:'最终检验与CoC签发', roles:{ DE:'', ENG:'文件包完整性技术审核', PLAN:'', QA:'最终检验执行，CoC合格证签发', OPS:'工件清洁、防护与包装' }},
+                { id:'7.2', name:'工件移交与交付', roles:{ DE:'', ENG:'', PLAN:'物流协调与交期确认', QA:'交付文件包正式签署', OPS:'序列号完整性核对，移交工件签署' }},
+                { id:'7.3', name:'工艺改进复盘(RCCA)', roles:{ DE:'设计更改建议与Lessons接收', ENG:'RCCA根因+工艺卡新版本发布', PLAN:'节拍与OEE分析，产能优化方案', QA:'逃逸缺陷分析与质量预防措施', OPS:'' }},
+                { id:'7.4', name:'知识库归档与更新', roles:{ DE:'设计Lessons Learned入库', ENG:'SOP新版本正式发布', PLAN:'产能与物料数据归档', QA:'质量记录包归档，预防措施跟踪', OPS:'' }}
+            ]}
+        };
+
+        // ── 反馈回路 ─────────────────────────────────
+        function initFeedback() {
+            const loops = [
+                {
+                    type: 'design',
+                    from: 'L6 现场执行 · QA',
+                    to:   'L1 CATIA设计模型 · DE',
+                    label: '设计变更回路',
+                    desc: '现场发现装配超差或干涉，触发ECO工程变更令，反馈至设计工程师修改CATIA三维模型。',
+                    trigger: '触发条件：装配超差 / 干涉 / 设计缺陷'
+                },
+                {
+                    type: 'process',
+                    from: 'L6 现场执行 · OPS',
+                    to:   'L3 制造工艺规划 · ENG',
+                    label: '工艺改版回路',
+                    desc: '操作人员反映工艺路线或工具不可行，工艺工程师修订工艺卡和接口文件。',
+                    trigger: '触发条件：工艺不可行 / 工具缺失 / 节拍异常'
+                },
+                {
+                    type: 'sop',
+                    from: 'L7 交付与反馈 · ENG',
+                    to:   'L5 SOP工作指令 · ENG',
+                    label: 'SOP更新回路',
+                    desc: '交付后发现工艺改进点，由工艺工程师更新SOP指令，纳入下一批次生产。',
+                    trigger: '触发条件：交付审计 / 工艺改进提案 / 客户反馈'
+                },
+                {
+                    type: 'quality',
+                    from: 'L7 交付与反馈 · QA',
+                    to:   'L3 制造工艺规划 · QA',
+                    label: '质量预防回路',
+                    desc: '最终检验的逃逸缺陷数据用于优化质量计划和关键控制点，防止同类问题复发。',
+                    trigger: '触发条件：CoC不合格 / 逃逸缺陷 / 客诉'
+                }
+            ];
+            const nodeColors = { design: '#dbeafe', process: '#dcfce7', sop: '#fef3c7', quality: '#f3e8ff' };
+            const container = document.getElementById('feedback-cards');
+            container.innerHTML = '<div class="feedback-title">4条关键反馈回路 — 打通单向瀑布流的闭环机制</div>';
+            loops.forEach(loop => {
+                const from_role  = loop.from.split(' · ')[1];
+                const from_phase = loop.from.split(' ')[0];
+                const to_role    = loop.to.split(' · ')[1];
+                const to_phase   = loop.to.split(' ')[0];
+                const nc = nodeColors[loop.type];
+                const card = document.createElement('div');
+                card.className = `loop-card ${loop.type}`;
+                card.innerHTML = `
+                    <div class="loop-arrow">
+                        <div class="loop-node" style="background:${nc}">${from_role}<br/><span style="font-weight:400;color:#64748b">${from_phase}</span></div>
+                        <div class="loop-connector"></div>
+                        <div class="loop-node" style="background:${nc}">${to_role}<br/><span style="font-weight:400;color:#64748b">${to_phase}</span></div>
+                    </div>
+                    <div class="loop-info">
+                        <strong>${loop.label}</strong>
+                        <div style="color:#4b5563">${loop.from} &nbsp;&#8594;&nbsp; ${loop.to}</div>
+                        <div style="margin-top:6px;color:#374151">${loop.desc}</div>
+                        <div class="loop-trigger">${loop.trigger}</div>
+                    </div>`;
+                container.appendChild(card);
+            });
+        }
+
+        // ── 流程分解视图 ─────────────────────────────────
+        function initDecomposition() {
+            const container = document.getElementById('decomp-view');
+            if (!container) return;
+            let html = '<table class="matrix-table" style="font-size:11px;">';
+            html += '<thead><tr><th style="min-width:190px;background:#f8fafc;">工序 / Procedure</th>';
+            roles.forEach(r => {
+                const label = r.name.replace(/^[^\s]+\s/, '');
+                html += `<th style="background:${r.color};">${label}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+            Object.entries(phase_procedures).forEach(([phaseId, phase]) => {
+                const phId = parseInt(phaseId);
+                html += `<tr class="phase-group-header" onclick="togglePhaseGroup(${phId})" style="background:${phase.color};cursor:pointer;">`;
+                html += `<td colspan="6" style="padding:10px 14px;font-weight:700;font-size:12px;color:#1a2e1a;">`;
+                html += `<span id="toggle-${phId}" class="phase-toggle">▼</span>L${phId}：${phase.name}</td></tr>`;
+                phase.procs.forEach(proc => {
+                    html += `<tr class="proc-row" data-phase="${phId}">`;
+                    html += `<td class="proc-id-cell"><span class="proc-id-badge">${proc.id}</span>${proc.name}</td>`;
+                    roles.forEach(role => {
+                        const action = proc.roles[role.id] || '';
+                        if (action) {
+                            html += `<td class="role-coop-cell" style="background:${role.color};cursor:pointer;padding:7px 9px;" onclick="showProcDetail('${proc.id}','${role.id}')">`;
+                            html += `<div class="coop-action">${action}</div></td>`;
+                        } else {
+                            html += `<td class="role-coop-cell empty"></td>`;
+                        }
+                    });
+                    html += '</tr>';
+                });
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function togglePhaseGroup(phaseId) {
+            const rows = document.querySelectorAll(`.proc-row[data-phase="${phaseId}"]`);
+            const toggle = document.getElementById(`toggle-${phaseId}`);
+            if (!rows.length) return;
+            const isHidden = rows[0].style.display === 'none';
+            rows.forEach(r => r.style.display = isHidden ? '' : 'none');
+            toggle.textContent = isHidden ? '▼' : '▶';
+        }
+
+        function showProcDetail(procId, roleId) {
+            const phaseId = procId.split('.')[0];
+            const phase   = phase_procedures[phaseId];
+            if (!phase) return;
+            const proc    = phase.procs.find(p => p.id === procId);
+            if (!proc) return;
+            const roleObj = roles.find(r => r.id === roleId);
+            const action  = proc.roles[roleId] || '';
+            const cellId  = `L${procId}-${roleId}`;
+            document.getElementById('modalCellId').textContent = cellId;
+            document.getElementById('modalCellName').textContent =
+                proc.name + '  ·  ' + (roleObj ? roleObj.name.replace(/^[^\s]+\s/, '') : roleId);
+            document.getElementById('modalWorkContent').innerHTML = action || '（本工序此角色不直接参与）';
+            // show coop, hide phase-level sections
+            document.getElementById('modalWfSection').style.display = 'none';
+            document.getElementById('modalPipelineSection').style.display = 'none';
+            document.getElementById('modalCoopSection').style.display = 'block';
+            const procLabel = document.getElementById('modalCoopProcLabel');
+            if (procLabel) procLabel.textContent = `工序 ${proc.id}：${proc.name} — 全角色协作分工`;
+            const coopEl = document.getElementById('modalCoopDetail');
+            coopEl.innerHTML = '<div class="coop-grid">' +
+                roles.map(r => {
+                    const act = proc.roles[r.id] || '';
+                    const inactive = act ? '' : ' inactive';
+                    const bg = act ? r.color : '#f1f5f9';
+                    const label = r.name.replace(/^[^\s]+\s/, '');
+                    return `<div class="coop-role-card${inactive}" style="background:${bg};">
+                        <div class="card-role-name">${label}</div>
+                        <div class="card-role-action">${act || '— 本工序不参与 —'}</div>
+                    </div>`;
+                }).join('') + '</div>';
+            document.getElementById('detailModal').classList.add('open');
+        }
+
+        // 初始化
+        window.onload = () => {
+            initMatrix();
+            initFeedback();
+            initDecomposition();
+        };
+    </script>
+<script>window.parent.postMessage({ action: "ready" }, "*"); 
+ 
+window.console = new Proxy(console, {
+  get(target, prop) {
+    if (['log', 'warn', 'error'].includes(prop)) {
+      return new Proxy(target[prop], {
+        apply(fn, thisArg, args) {
+          fn.apply(thisArg, args);
+          window.parent.postMessage({ action: 'console', 
+            type: prop, 
+            args: args.map((arg) => {
+              try {
+                return JSON.stringify(arg).replace(/^["']|["']$/g, '');
+              } catch (e) {
+                return arg;
+              }
+            }) 
+          }, '*');
+        }
+      });
+    }
+    return target[prop];
+  }
+});
+</script></body>
+</html>
+

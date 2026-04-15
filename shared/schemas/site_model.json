@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SiteModel",
+  "description": "底图模型 — ParseAgent 核心输出。基于 Agent Profile §1.4 定义。",
+  "type": "object",
+  "properties": {
+    "site_model_id": {"type": "string", "pattern": "^SM-[A-Z0-9]{3,}$"},
+    "cad_source": {
+      "type": "object",
+      "properties": {
+        "filename": {"type": "string"},
+        "sha256": {"type": "string"},
+        "format": {"type": "string", "enum": ["DWG", "IFC", "STEP", "DXF", "AUTO"]},
+        "coord_system": {"type": "string", "enum": ["WCS", "UCS", "AUTO"]},
+        "import_timestamp": {"type": "string", "format": "date-time"}
+      },
+      "required": ["filename"]
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "asset_guid": {"type": "string"},
+          "type": {"type": "string", "enum": ["Equipment", "Conveyor", "LiftingPoint", "Zone", "Other"]},
+          "coords": {
+            "type": "object",
+            "properties": {"x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}}
+          },
+          "footprint": {
+            "type": "object",
+            "properties": {"length_mm": {"type": "number"}, "width_mm": {"type": "number"}, "height_mm": {"type": "number"}}
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {"port_name": {"type": "string"}, "coords": {"type": "object"}}
+            }
+          },
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+          "layer": {"type": "string"}
+        }
+      }
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source_guid": {"type": "string"},
+          "target_guid": {"type": "string"},
+          "link_type": {"type": "string", "enum": ["APPLIES_TO", "GOVERNED_BY", "FEEDS", "PAIR_WITH", "TRAVERSES", "LOCATED_IN"]},
+          "metadata": {"type": "object"}
+        }
+      }
+    },
+    "geometry_integrity_score": {"type": "number", "minimum": 0, "maximum": 1},
+    "statistics": {"type": "object"}
+  },
+  "required": ["site_model_id", "assets", "links", "geometry_integrity_score"]
+}

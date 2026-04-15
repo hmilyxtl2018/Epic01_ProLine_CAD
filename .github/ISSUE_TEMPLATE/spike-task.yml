@@ -1,0 +1,69 @@
+name: "\U0001F680 Spike / Agent 实现任务"
+description: "Agent 功能开发或 Spike 技术验证任务"
+title: "[<Milestone>] <简短描述>"
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: milestone
+    attributes:
+      label: 所属阶段 (Milestone)
+      options:
+        - "M0: 项目准备与发现"
+        - "M1: 基础设施与 MCP Toolbelt"
+        - "M2: ParseAgent"
+        - "M3: ConstraintAgent"
+        - "M4: LayoutAgent"
+        - "M5: 编排+LLM+UI"
+        - "M6: 测试+部署"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: agent
+    attributes:
+      label: 关联 Agent
+      options:
+        - "ParseAgent (Agent1)"
+        - "ConstraintAgent (Agent2)"
+        - "LayoutAgent (Agent3)"
+        - "Orchestrator"
+        - "Shared / Infrastructure"
+        - "N/A"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 任务描述
+      description: "详细描述需要实现的功能或验证的技术点"
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收准则 (DoD)
+      description: "列出完成标准，引用 Thresholds 或 PRD 中的指标"
+      placeholder: |
+        - [ ] avg_confidence >= 0.90 (Thresholds.S1_AVG_CONFIDENCE)
+        - [ ] p95_latency <= 5s
+        - [ ] 单元测试覆盖率 > 80%
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: 参考文档
+      description: "相关 PRD 章节、执行计划段落、Spike 编号等"
+      placeholder: |
+        - ExcPlan/3-Agent 执行计划 §阶段2
+        - PRD-1 v3.0 §2.1.4
+        - spikes/spike_01_dwg_parse/
+
+  - type: input
+    id: estimate
+    attributes:
+      label: 估时 (人天)
+      placeholder: "3"

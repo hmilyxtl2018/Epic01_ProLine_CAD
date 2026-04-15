@@ -1,0 +1,207 @@
+{
+  "description": "Spike-4 DES仿真输入配置 — 航空制造脉动总装线",
+  "version": "1.0",
+  "scenarios": [
+    {
+      "scenario_id": "SIM-01-DETERMINISTIC",
+      "name": "6站脉动线确定性仿真",
+      "description": "OEE=1.0, 无故障, 验证JPH理论值",
+      "sim_duration_hours": 720,
+      "warm_up_hours": 72,
+      "random_seed": 42,
+      "shift_pattern": "3x8",
+      "stations": [
+        {
+          "name": "ST-1 机身大部件对接",
+          "cycle_time_hours": 72,
+          "oee": 1.0,
+          "workers_per_shift": 12,
+          "crane_required": "30T",
+          "crane_exclusive": true
+        },
+        {
+          "name": "ST-2 翼身对接+起落架",
+          "cycle_time_hours": 72,
+          "oee": 1.0,
+          "workers_per_shift": 12,
+          "crane_required": "30T",
+          "crane_exclusive": true,
+          "is_bottleneck": true,
+          "notes": "翼身对接精度要求最高，天车占用时间最长"
+        },
+        {
+          "name": "ST-3 系统安装(管路+电缆)",
+          "cycle_time_hours": 72,
+          "oee": 1.0,
+          "workers_per_shift": 16,
+          "crane_required": null,
+          "ndt_dependency": true
+        },
+        {
+          "name": "ST-4 航电/内饰安装",
+          "cycle_time_hours": 72,
+          "oee": 1.0,
+          "workers_per_shift": 14,
+          "crane_required": null
+        },
+        {
+          "name": "ST-5 地面功能测试(GFT)",
+          "cycle_time_hours": 72,
+          "oee": 1.0,
+          "workers_per_shift": 10,
+          "crane_required": null
+        },
+        {
+          "name": "ST-6 交付前检查",
+          "cycle_time_hours": 48,
+          "oee": 1.0,
+          "workers_per_shift": 8,
+          "crane_required": null
+        }
+      ],
+      "shared_resources": [
+        {
+          "name": "30T天车",
+          "capacity": 2,
+          "notes": "2台30T天车, ST-1和ST-2共享"
+        }
+      ],
+      "expected_results": {
+        "throughput_per_year": 50,
+        "takt_time_hours": 72,
+        "bottleneck_station": "ST-2 翼身对接+起落架",
+        "notes": "确定性场景下所有站位节拍一致(72h), ST-6较短(48h)不影响"
+      }
+    },
+    {
+      "scenario_id": "SIM-02-STOCHASTIC",
+      "name": "6站脉动线随机故障仿真",
+      "description": "OEE<1, 各站有随机故障, 验证仿真精度",
+      "sim_duration_hours": 4320,
+      "warm_up_hours": 720,
+      "random_seed": 42,
+      "num_replications": 10,
+      "shift_pattern": "3x8",
+      "stations": [
+        {
+          "name": "ST-1 机身大部件对接",
+          "cycle_time_hours": 72,
+          "oee": 0.85,
+          "mtbf_hours": 500,
+          "mttr_hours": 8,
+          "workers_per_shift": 12,
+          "crane_required": "30T"
+        },
+        {
+          "name": "ST-2 翼身对接+起落架",
+          "cycle_time_hours": 72,
+          "oee": 0.80,
+          "mtbf_hours": 400,
+          "mttr_hours": 12,
+          "workers_per_shift": 12,
+          "crane_required": "30T",
+          "notes": "OEE最低——对接精度要求导致更多返工"
+        },
+        {
+          "name": "ST-3 系统安装(管路+电缆)",
+          "cycle_time_hours": 72,
+          "oee": 0.88,
+          "mtbf_hours": 600,
+          "mttr_hours": 6,
+          "workers_per_shift": 16,
+          "ndt_wait_hours": {"mean": 4, "std": 2},
+          "notes": "NDT夜班排期导致额外等待"
+        },
+        {
+          "name": "ST-4 航电/内饰安装",
+          "cycle_time_hours": 72,
+          "oee": 0.90,
+          "mtbf_hours": 700,
+          "mttr_hours": 4,
+          "workers_per_shift": 14
+        },
+        {
+          "name": "ST-5 地面功能测试(GFT)",
+          "cycle_time_hours": 72,
+          "oee": 0.82,
+          "mtbf_hours": 300,
+          "mttr_hours": 10,
+          "workers_per_shift": 10,
+          "notes": "液压/电气测试故障率较高"
+        },
+        {
+          "name": "ST-6 交付前检查",
+          "cycle_time_hours": 48,
+          "oee": 0.95,
+          "mtbf_hours": 1000,
+          "mttr_hours": 2,
+          "workers_per_shift": 8
+        }
+      ],
+      "shared_resources": [
+        {"name": "30T天车", "capacity": 2},
+        {"name": "NDT团队(夜班)", "capacity": 1, "available_hours": [22, 6]}
+      ],
+      "auxiliary_processes": [
+        {
+          "name": "喷漆(附属厂房)",
+          "after_station": "ST-5",
+          "duration_hours": {"mean": 96, "std": 12},
+          "capacity": 1,
+          "notes": "喷漆固化时间长，不受脉动节拍控制，可能造成交付延误"
+        }
+      ],
+      "expected_results": {
+        "throughput_per_year": {"min": 38, "max": 48},
+        "bottleneck_station": "ST-2 翼身对接+起落架",
+        "known_bottlenecks": [
+          "ST-2 OEE最低 + 天车争用",
+          "30T天车在ST-1和ST-2之间产生资源冲突",
+          "NDT夜班约束导致ST-3→ST-4等待",
+          "喷漆固化时间不受脉动控制，延误交付"
+        ]
+      }
+    },
+    {
+      "scenario_id": "SIM-03-5STATION-SIMPLE",
+      "name": "5工站简单串行线(通用验证)",
+      "description": "5个工站简化模型, 对标验证计划TC01/TC02",
+      "sim_duration_hours": 8,
+      "warm_up_hours": 1,
+      "random_seed": 42,
+      "stations": [
+        {"name": "WS-1", "cycle_time_s": 30, "oee": 1.0},
+        {"name": "WS-2", "cycle_time_s": 25, "oee": 1.0},
+        {"name": "WS-3", "cycle_time_s": 35, "oee": 1.0},
+        {"name": "WS-4", "cycle_time_s": 28, "oee": 1.0},
+        {"name": "WS-5", "cycle_time_s": 20, "oee": 1.0}
+      ],
+      "expected_results": {
+        "jph": 102.86,
+        "bottleneck_station": "WS-3",
+        "formula": "3600 / max(cycle_time) = 3600/35 = 102.86"
+      }
+    },
+    {
+      "scenario_id": "SIM-04-5STATION-FAILURE",
+      "name": "5工站随机故障线",
+      "description": "TC02: OEE<1, 需10次重复取均值",
+      "sim_duration_hours": 8,
+      "warm_up_hours": 1,
+      "random_seed": 42,
+      "num_replications": 10,
+      "stations": [
+        {"name": "WS-1", "cycle_time_s": 30, "oee": 0.85, "mtbf_min": 100, "mttr_min": 10},
+        {"name": "WS-2", "cycle_time_s": 25, "oee": 0.85, "mtbf_min": 120, "mttr_min": 8},
+        {"name": "WS-3", "cycle_time_s": 35, "oee": 0.85, "mtbf_min": 80, "mttr_min": 15},
+        {"name": "WS-4", "cycle_time_s": 28, "oee": 0.85, "mtbf_min": 100, "mttr_min": 10},
+        {"name": "WS-5", "cycle_time_s": 20, "oee": 0.85, "mtbf_min": 150, "mttr_min": 5}
+      ],
+      "expected_results": {
+        "jph_range": [80, 98],
+        "bottleneck_station": "WS-3",
+        "error_tolerance_percent": 5
+      }
+    }
+  ]
+}

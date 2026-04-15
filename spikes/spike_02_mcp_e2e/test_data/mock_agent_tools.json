@@ -1,0 +1,263 @@
+{
+  "description": "Spike-2 MCP通信测试用 — Mock Agent Tool 定义",
+  "version": "1.0",
+  "agents": [
+    {
+      "agent_id": "parse-agent",
+      "name": "底图解析Agent",
+      "transport": "stdio",
+      "command": "python -m agents.parse_agent.server",
+      "tools": [
+        {
+          "name": "parseDWG",
+          "description": "解析DWG/DXF底图，输出SiteModel JSON",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "file_ref": {"type": "string", "description": "S3文件引用 s3://bucket/path"},
+              "coordinate_config": {
+                "type": "object",
+                "properties": {
+                  "origin": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+                  "unit": {"type": "string", "enum": ["mm", "cm", "m"]}
+                },
+                "required": ["origin", "unit"]
+              }
+            },
+            "required": ["file_ref", "coordinate_config"]
+          },
+          "mock_response": {
+            "site_guid": "site_mock_001",
+            "mcp_context_id": "ctx_parse_mock_001",
+            "layers": {"A-WALL": 4, "A-COLS": 20, "M-EQUIP": 15},
+            "total_entities": 39,
+            "coordinate_origin": [0, 0, 0],
+            "unit": "mm"
+          },
+          "mock_latency_ms": 500
+        },
+        {
+          "name": "alignCoordinate",
+          "description": "基于参考点对齐坐标系",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "site_guid": {"type": "string"},
+              "reference_points": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "dwg": {"type": "array", "items": {"type": "number"}},
+                    "real": {"type": "array", "items": {"type": "number"}}
+                  }
+                }
+              }
+            },
+            "required": ["site_guid", "reference_points"]
+          },
+          "mock_response": {
+            "alignment_error_mm": 3.2,
+            "transform_matrix": [[1,0,1000],[0,1,2000],[0,0,1]],
+            "passed": true
+          },
+          "mock_latency_ms": 200
+        }
+      ]
+    },
+    {
+      "agent_id": "constraint-agent",
+      "name": "工艺约束Agent",
+      "transport": "sse",
+      "endpoint": "http://localhost:8001/sse",
+      "tools": [
+        {
+          "name": "extractSOP",
+          "description": "从SOP文档中提取工艺约束",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "document_refs": {"type": "array", "items": {"type": "string"}},
+              "extraction_mode": {"type": "string", "enum": ["auto", "manual_review"]}
+            },
+            "required": ["document_refs"]
+          },
+          "mock_response": {
+            "constraint_set_id": "cst_mock_001",
+            "mcp_context_id": "ctx_constraint_mock_001",
+            "constraints": [
+              {"id": "cst_001", "type": "hard", "rule": "temperature == 20 ± 3°C"},
+              {"id": "cst_002", "type": "hard", "rule": "distance(CNC, composite_zone) >= 15000mm"}
+            ],
+            "constraint_count": 2
+          },
+          "mock_latency_ms": 2000
+        },
+        {
+          "name": "retrieveNorm",
+          "description": "从知识库检索行业规范",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "query": {"type": "string"},
+              "top_k": {"type": "integer", "default": 5}
+            },
+            "required": ["query"]
+          },
+          "mock_response": {
+            "results": [
+              {"source": "GJB 2639A §5.3", "content": "数控加工精度要求...", "score": 0.92}
+            ]
+          },
+          "mock_latency_ms": 300
+        }
+      ]
+    },
+    {
+      "agent_id": "layout-agent",
+      "name": "布局优化Agent",
+      "transport": "stdio",
+      "command": "python -m agents.layout_agent.server",
+      "tools": [
+        {
+          "name": "generateLayout",
+          "description": "基于约束生成布局方案",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "site_guid": {"type": "string"},
+              "constraint_set_id": {"type": "string"},
+              "strategy": {"type": "string", "enum": ["greedy", "genetic", "simulated_annealing"]}
+            },
+            "required": ["site_guid", "constraint_set_id"]
+          },
+          "mock_response": {
+            "layout_id": "layout_mock_001",
+            "mcp_context_id": "ctx_layout_mock_001",
+            "total_score": 0.85,
+            "collision_count": 0,
+            "zone_violations": 0
+          },
+          "mock_latency_ms": 3000
+        },
+        {
+          "name": "collisionCheck",
+          "description": "碰撞检测",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "layout_id": {"type": "string"},
+              "moved_asset_guid": {"type": "string"}
+            },
+            "required": ["layout_id"]
+          },
+          "mock_response": {
+            "collisions": [],
+            "zone_violations": [],
+            "check_time_ms": 15
+          },
+          "mock_latency_ms": 50
+        }
+      ]
+    },
+    {
+      "agent_id": "simulation-agent",
+      "name": "仿真Agent",
+      "transport": "stdio",
+      "command": "python -m agents.simulation_agent.server",
+      "tools": [
+        {
+          "name": "runDES",
+          "description": "运行DES离散事件仿真",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "layout_id": {"type": "string"},
+              "sim_config": {
+                "type": "object",
+                "properties": {
+                  "duration_hours": {"type": "number"},
+                  "random_seed": {"type": "integer"}
+                }
+              }
+            },
+            "required": ["layout_id"]
+          },
+          "mock_response": {
+            "sim_id": "sim_mock_001",
+            "mcp_context_id": "ctx_sim_mock_001",
+            "jph": 102.5,
+            "bottleneck_station": "ST-2",
+            "bottleneck_severity": "high"
+          },
+          "mock_latency_ms": 5000
+        }
+      ]
+    },
+    {
+      "agent_id": "report-agent",
+      "name": "报告生成Agent",
+      "transport": "sse",
+      "endpoint": "http://localhost:8005/sse",
+      "tools": [
+        {
+          "name": "generateReport",
+          "description": "汇总数据生成报告",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "project_id": {"type": "string"},
+              "format": {"type": "string", "enum": ["pdf", "docx", "xlsx"]},
+              "sections": {"type": "array", "items": {"type": "string"}}
+            },
+            "required": ["project_id", "format"]
+          },
+          "mock_response": {
+            "report_id": "rpt_mock_001",
+            "file_ref": "s3://reports/rpt_mock_001.pdf",
+            "page_count": 25
+          },
+          "mock_latency_ms": 3000
+        }
+      ]
+    }
+  ],
+  "context_propagation_test": {
+    "description": "测试MCP Context ID在5个Agent间的传播链",
+    "expected_chain": [
+      {"agent": "parse-agent",      "context_id": "ctx_parse_*",      "parent": null},
+      {"agent": "constraint-agent", "context_id": "ctx_constraint_*", "parent": "ctx_parse_*"},
+      {"agent": "layout-agent",     "context_id": "ctx_layout_*",     "parent": ["ctx_parse_*", "ctx_constraint_*"]},
+      {"agent": "simulation-agent", "context_id": "ctx_sim_*",        "parent": "ctx_layout_*"},
+      {"agent": "report-agent",     "context_id": "ctx_report_*",     "parent": ["ctx_sim_*", "ctx_layout_*"]}
+    ]
+  },
+  "error_test_cases": [
+    {
+      "test_id": "ERR-01",
+      "description": "调用不存在的Tool",
+      "agent": "parse-agent",
+      "tool": "nonExistentTool",
+      "expected_error_code": -32601,
+      "expected_error_message": "Method not found"
+    },
+    {
+      "test_id": "ERR-02",
+      "description": "参数缺失",
+      "agent": "parse-agent",
+      "tool": "parseDWG",
+      "arguments": {},
+      "expected_error_code": -32602,
+      "expected_error_message": "Invalid params"
+    },
+    {
+      "test_id": "ERR-03",
+      "description": "文件不存在",
+      "agent": "parse-agent",
+      "tool": "parseDWG",
+      "arguments": {"file_ref": "s3://nonexistent/file.dwg", "coordinate_config": {"origin": [0,0,0], "unit": "mm"}},
+      "expected_error_code": 5001,
+      "expected_error_message": "File not found"
+    }
+  ]
+}

@@ -1,0 +1,328 @@
+
+
+```json
+{
+  "metadata": {
+    "version": "v3.0",
+    "doc_ref": "PRD-1~5 权限矩阵 v3.0",
+    "generated_date": "2026-04-13",
+    "description": "基于 PRD-1~5 精确权限定义的完整 RBAC 矩阵，用于后端权限守卫和前端 UI 权限控制"
+  },
+
+  "roles": {
+    "PLANNER_CHIEF": {
+      "name": "产线规划设计师",
+      "description": "负责底图解析、语义化建模，构建 SiteModel 全链路真理源",
+      "category": "ENGINEER",
+      "risk_level": "MEDIUM",
+      "department": "规划设计部"
+    },
+    "CHECKPOINT_APPROVER": {
+      "name": "检查点审核/授权人（CP-A）",
+      "description": "对 SiteModel 质量门控并签发/撤销 CP-A Token",
+      "category": "APPROVER",
+      "risk_level": "HIGH",
+      "department": "管理层"
+    },
+    "PROCESS_ENGINEER": {
+      "name": "工艺工程师",
+      "description": "负责工艺文档解析、约束审核、冲突仲裁，签发 CP-B",
+      "category": "ENGINEER",
+      "risk_level": "MEDIUM",
+      "department": "工艺部"
+    },
+    "LAYOUT_ENGINEER": {
+      "name": "布局工程师",
+      "description": "负责布局方案生成、验证、优化，申请 Gate C 锁版",
+      "category": "ENGINEER",
+      "risk_level": "MEDIUM",
+      "department": "规划设计部"
+    },
+    "SIM_ENGINEER": {
+      "name": "仿真工程师",
+      "description": "负责脉动仿真、参数配置、结果评审，签发 CP-D",
+      "category": "ENGINEER",
+      "risk_level": "MEDIUM",
+      "department": "工程部"
+    },
+    "PROJECT_MANAGER": {
+      "name": "项目经理 / 总工程师",
+      "description": "负责全链路审批：Gate C 布局审批、Gate D 仿真审批、决策批准",
+      "category": "MANAGER",
+      "risk_level": "CRITICAL",
+      "department": "管理层"
+    },
+    "AUDITOR": {
+      "name": "合规审查员",
+      "description": "负责审计追踪、审计日志导出、合规验证",
+      "category": "VIEWER",
+      "risk_level": "LOW",
+      "department": "合规部"
+    },
+    "SYSTEM_ADMIN": {
+      "name": "系统管理员",
+      "description": "系统配置、权限管理、审计和补偿动作",
+      "category": "ADMIN",
+      "risk_level": "CRITICAL",
+      "department": "IT"
+    }
+  },
+
+  "modules": {
+    "S1_SITEMODEL": {
+      "name": "S1 底图解析与环境构建",
+      "description": "DWG/IFC 解析、语义识别、坐标锚定、版本管理",
+      "permissions": {
+        "read": ["PLANNER_CHIEF", "CHECKPOINT_APPROVER", "PROCESS_ENGINEER", "LAYOUT_ENGINEER", "SIM_ENGINEER", "PROJECT_MANAGER", "AUDITOR", "SYSTEM_ADMIN"],
+        "write": ["PLANNER_CHIEF", "CHECKPOINT_APPROVER", "PROJECT_MANAGER", "SYSTEM_ADMIN"],
+        "sign_cp_a": ["CHECKPOINT_APPROVER", "PROJECT_MANAGER", "SYSTEM_ADMIN"],
+        "invalidate_token": ["PROJECT_MANAGER", "SYSTEM_ADMIN"]
+      }
+    },
+    "S2_CONSTRAINT": {
+      "name": "S2 工艺约束与知识图谱",
+      "description": "文档解析、约束审核、冲突仲裁、CP-B 签发",
+      "permissions": {
+        "read": ["PLANNER_CHIEF", "PROCESS_ENGINEER", "LAYOUT_ENGINEER", "SIM_ENGINEER", "PROJECT_MANAGER", "AUDITOR", "SYSTEM_ADMIN"],
+        "write": ["PROCESS_ENGINEER", "SIM_ENGINEER"],
+        "upload_document": ["PROCESS_ENGINEER"],
+        "review_constraint": ["PROCESS_ENGINEER"],
+        "arbitrate_conflict": ["PROCESS_ENGINEER"],
+        "sign_cp_b": ["PROCESS_ENGINEER", "SYSTEM_ADMIN"],
+        "invalidate_token": ["PROJECT_MANAGER", "SYSTEM_ADMIN"]
+      }
+    },
+    "S2_LAYOUT": {
+      "name": "S2 约束驱动布局优化",
+      "description": "候选生成、约束验证、吊运检测、Gate C 申请",
+      "permissions": {
+        "read": ["PLANNER_CHIEF", "PROCESS_ENGINEER", "LAYOUT_ENGINEER", "SIM_ENGINEER", "PROJECT_MANAGER", "AUDITOR", "SYSTEM_ADMIN"],
+        "write": ["LAYOUT_ENGINEER"],
+        "create_candidate": ["LAYOUT_ENGINEER"],
+        "validate_constraint": ["LAYOUT_ENGINEER"],
+        "crane_check": ["LAYOUT_ENGINEER"],
+        "request_gate_c": ["LAYOUT_ENGINEER"],
+        "approve_gate_c": ["PROJECT_MANAGER", "SYSTEM_ADMIN"],
+        "invalidate_token": ["PROJECT_MANAGER", "SYSTEM_ADMIN"]
+      }
+    },
+    "S3_SIM": {
+      "name": "S3 脉动仿真验证",
+      "description": "参数配置、仿真执行、结果评审、CP-D 签发",
+      "permissions": {
+        "read": ["PLANNER_CHIEF", "PROCESS_ENGINEER", "LAYOUT_ENGINEER", "SIM_ENGINEER", "PROJECT_MANAGER", "AUDITOR", "SYSTEM_ADMIN"],
+        "write": ["SIM_ENGINEER"],
+        "create_task": ["SIM_ENGINEER"],
+        "config_parameter": ["SIM_ENGINEER"],
+        "run_simulation": ["SIM_ENGINEER"],
+        "review_result": ["SIM_ENGINEER"],
+        "sign_cp_d": ["SIM_ENGINEER", "SYSTEM_ADMIN"],
+        "invalidate_token": ["PROJECT_MANAGER", "SYSTEM_ADMIN"]
+      }
+    },
+    "S4_DECISION": {
+      "name": "S4 活体决策工作台",
+      "description": "Decision 生命周期、审计日志、快照导出",
+      "permissions": {
+        "read": ["PLANNER_CHIEF", "PROCESS_ENGINEER", "LAYOUT_ENGINEER", "SIM_ENGINEER", "PROJECT_MANAGER", "AUDITOR", "SYSTEM_ADMIN"],
+        "write": ["PROJECT_MANAGER"],
+        "draft_decision": ["PROJECT_MANAGER"],
+        "approve_decision": ["PROJECT_MANAGER", "SYSTEM_ADMIN"],
+        "sign_cp_e": ["PROJECT_MANAGER", "SYSTEM_ADMIN"],
+        "export_snapshot": ["PROJECT_MANAGER", "AUDITOR", "SYSTEM_ADMIN"],
+        "view_audit_log": ["AUDITOR", "SYSTEM_ADMIN"],
+        "export_audit_log": ["AUDITOR", "SYSTEM_ADMIN"]
+      }
+    }
+  },
+
+  "actions": {
+    "lockObject": {
+      "name": "锁版对象",
+      "description": "将 Ontology 对象从 DRAFT 转为 LOCKED，签发对应 Token",
+      "authorized_roles": ["CHECKPOINT_APPROVER", "PROCESS_ENGINEER", "PROJECT_MANAGER", "SYSTEM_ADMIN"],
+      "risk_level": "HIGH",
+      "audit_required": true,
+      "reversible": false,
+      "affected_tokens": ["CP-A", "CP-B", "CP-C", "CP-D", "CP-E"]
+    },
+    "invalidateDownstream": {
+      "name": "级联失效下游",
+      "description": "当上游 Token 失效时，级联失效所有下游 Token 和依赖对象",
+      "authorized_roles": ["PROJECT_MANAGER", "SYSTEM_ADMIN"],
+      "risk_level": "CRITICAL",
+      "audit_required": true,
+      "reversible": false,
+      "trigger": "AUTOMATIC"
+    },
+    "requestHumanReview": {
+      "name": "发起人工审核",
+      "description": "将对象重新进入审核队列，要求人工确认",
+      "authorized_roles": ["PLANNER_CHIEF", "PROCESS_ENGINEER", "LAYOUT_ENGINEER", "SIM_ENGINEER"],
+      "risk_level": "MEDIUM",
+      "audit_required": true,
+      "reversible": true
+    },
+    "escalateToHuman": {
+      "name": "升级至人工处理",
+      "description": "标记对象为待人工处理，可选阻断下游",
+      "authorized_roles": ["PROCESS_ENGINEER", "LAYOUT_ENGINEER", "SIM_ENGINEER", "SYSTEM_ADMIN"],
+      "risk_level": "MEDIUM",
+      "audit_required": true,
+      "reversible": true
+    },
+    "notifyStakeholders": {
+      "name": "通知相关干系人",
+      "description": "发送站内通知、邮件、企业通讯工具通知",
+      "authorized_roles": ["ALL"],
+      "risk_level": "LOW",
+      "audit_required": true,
+      "reversible": false,
+      "trigger": "AUTOMATIC"
+    },
+    "suspendOperation": {
+      "name": "暂停工序",
+      "description": "在违规约束触发时自动暂停相关工序",
+      "authorized_roles": ["PROCESS_ENGINEER", "SYSTEM_ADMIN"],
+      "risk_level": "HIGH",
+      "audit_required": true,
+      "reversible": true,
+      "trigger": "AUTOMATIC"
+    },
+    "snapshotObject": {
+      "name": "生成不可变快照",
+      "description": "对 Decision 及其引用的所有 Token 生成版本快照，用于决策证据链",
+      "authorized_roles": ["PROJECT_MANAGER", "AUDITOR", "SYSTEM_ADMIN"],
+      "risk_level": "MEDIUM",
+      "audit_required": true,
+      "reversible": false
+    },
+    "approveDecision": {
+      "name": "批准决策",
+      "description": "将 Decision 从 PENDING_APPROVAL 变更为 FINAL，生成 CP-E Token",
+      "authorized_roles": ["PROJECT_MANAGER", "SYSTEM_ADMIN"],
+      "risk_level": "CRITICAL",
+      "audit_required": true,
+      "reversible": false
+    }
+  },
+
+  "data_access_matrix": {
+    "PLANNER_CHIEF": {
+      "S1_SITEMODEL": { "read": true, "write": true, "delete": false },
+      "S2_CONSTRAINT": { "read": true, "write": false, "delete": false },
+      "S2_LAYOUT": { "read": true, "write": false, "delete": false },
+      "S3_SIM": { "read": true, "write": false, "delete": false },
+      "S4_DECISION": { "read": true, "write": false, "delete": false },
+      "AUDIT_LOG": { "read": false, "write": false, "delete": false }
+    },
+    "CHECKPOINT_APPROVER": {
+      "S1_SITEMODEL": { "read": true, "write": true, "delete": false },
+      "S2_CONSTRAINT": { "read": true, "write": false, "delete": false },
+      "S2_LAYOUT": { "read": true, "write": false, "delete": false },
+      "S3_SIM": { "read": true, "write": false, "delete": false },
+      "S4_DECISION": { "read": true, "write": false, "delete": false },
+      "AUDIT_LOG": { "read": false, "write": false, "delete": false }
+    },
+    "PROCESS_ENGINEER": {
+      "S1_SITEMODEL": { "read": true, "write": false, "delete": false },
+      "S2_CONSTRAINT": { "read": true, "write": true, "delete": false },
+      "S2_LAYOUT": { "read": true, "write": false, "delete": false },
+      "S3_SIM": { "read": true, "write": true, "delete": false },
+      "S4_DECISION": { "read": true, "write": false, "delete": false },
+      "AUDIT_LOG": { "read": false, "write": false, "delete": false }
+    },
+    "LAYOUT_ENGINEER": {
+      "S1_SITEMODEL": { "read": true, "write": false, "delete": false },
+      "S2_CONSTRAINT": { "read": true, "write": false, "delete": false },
+      "S2_LAYOUT": { "read": true, "write": true, "delete": false },
+      "S3_SIM": { "read": true, "write": false, "delete": false },
+      "S4_DECISION": { "read": true, "write": false, "delete": false },
+      "AUDIT_LOG": { "read": false, "write": false, "delete": false }
+    },
+    "SIM_ENGINEER": {
+      "S1_SITEMODEL": { "read": true, "write": false, "delete": false },
+      "S2_CONSTRAINT": { "read": true, "write": false, "delete": false },
+      "S2_LAYOUT": { "read": true, "write": false, "delete": false },
+      "S3_SIM": { "read": true, "write": true, "delete": false },
+      "S4_DECISION": { "read": true, "write": false, "delete": false },
+      "AUDIT_LOG": { "read": false, "write": false, "delete": false }
+    },
+    "PROJECT_MANAGER": {
+      "S1_SITEMODEL": { "read": true, "write": true, "delete": false },
+      "S2_CONSTRAINT": { "read": true, "write": false, "delete": false },
+      "S2_LAYOUT": { "read": true, "write": true, "delete": false },
+      "S3_SIM": { "read": true, "write": false, "delete": false },
+      "S4_DECISION": { "read": true, "write": true, "delete": false },
+      "AUDIT_LOG": { "read": true, "write": false, "delete": false }
+    },
+    "AUDITOR": {
+      "S1_SITEMODEL": { "read": true, "write": false, "delete": false },
+      "S2_CONSTRAINT": { "read": true, "write": false, "delete": false },
+      "S2_LAYOUT": { "read": true, "write": false, "delete": false },
+      "S3_SIM": { "read": true, "write": false, "delete": false },
+      "S4_DECISION": { "read": true, "write": false, "delete": false },
+      "AUDIT_LOG": { "read": true, "write": true, "delete": false }
+    },
+    "SYSTEM_ADMIN": {
+      "S1_SITEMODEL": { "read": true, "write": true, "delete": true },
+      "S2_CONSTRAINT": { "read": true, "write": true, "delete": true },
+      "S2_LAYOUT": { "read": true, "write": true, "delete": true },
+      "S3_SIM": { "read": true, "write": true, "delete": true },
+      "S4_DECISION": { "read": true, "write": true, "delete": true },
+      "AUDIT_LOG": { "read": true, "write": true, "delete": false }
+    }
+  },
+
+  "token_lifecycle_guards": {
+    "CP-A": {
+      "token_type": "SITEMODEL_LOCK",
+      "issued_by": ["CHECKPOINT_APPROVER", "PROJECT_MANAGER"],
+      "signed_off_by": "CHECKPOINT_APPROVER",
+      "prerequisite_checks": [
+        "SM001_coord_precision_ok",
+        "SM002_obstacles_100pct",
+        "SM003_device_id_aligned",
+        "SM004_pit_confirmed",
+        "SM005_restricted_zone_confirmed",
+        "SM006_crane_data_complete",
+        "SM007_version_locked"
+      ],
+      "invalidation_triggers": ["SITEMODEL_CONTENT_CHANGED", "MANUAL_REVOKE"],
+      "cascade_effect": ["CP-B", "CP-C", "CP-D"]
+    },
+    "CP-B": {
+      "token_type": "CONSTRAINTSET_LOCK",
+      "issued_by": ["PROCESS_ENGINEER"],
+      "signed_off_by": "PROCESS_ENGINEER",
+      "prerequisite_checks": [
+        "HARD_CONFLICTS_RESOLVED",
+        "REVIEW_QUEUE_EMPTY",
+        "SOURCE_TRACE_RATE_99PCT",
+        "Z3_SAT_RESULT_OK",
+        "NO_LOW_CONFIDENCE"
+      ],
+      "invalidation_triggers": ["CONSTRAINTSET_MODIFIED", "CP-A_INVALIDATED", "MANUAL_REVOKE"],
+      "cascade_effect": ["CP-C", "CP-D"]
+    },
+    "CP-C": {
+      "token_type": "LAYOUT_LOCK",
+      "issued_by": ["PROJECT_MANAGER"],
+      "signed_off_by": "PROJECT_MANAGER",
+      "prerequisite_checks": [
+        "HARD_VIOLATION_ZERO",
+        "COVERAGE_GTE_95PCT",
+        "CRANE_CHECK_DONE",
+        "CP-A_VALID",
+        "CP-B_VALID"
+      ],
+      "invalidation_triggers": ["LAYOUT_MODIFIED", "CP-A_INVALIDATED", "CP-B_INVALIDATED", "MANUAL_REVOKE"],
+      "cascade_effect": ["CP-D", "DECISION_FINAL"]
+    },
+    "CP-D": {
+      "token_type": "SIM_APPROVAL",
+      "issued_by": ["SIM_ENGINEER"],
+      "signed_off_by": "SIM_ENGINEER",
+      "prerequisite_checks": [
+        "SIM_COMPLETED",
+        "TAKT_TIME_VARIANCE_LTE_25

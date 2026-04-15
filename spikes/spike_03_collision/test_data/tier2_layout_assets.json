@@ -1,0 +1,262 @@
+{
+  "description": "Spike-3 碰撞检测测试数据 — 航空制造Tier-2布局",
+  "unit": "mm",
+  "factory": {
+    "width": 150000,
+    "height": 80000,
+    "name": "Tier-2 机身段对接装配厂"
+  },
+  "exclusion_zones": [
+    {
+      "id": "ZONE-NDT-01",
+      "type": "radiation",
+      "shape": "circle",
+      "center": [33000, 28000],
+      "radius": 15000,
+      "description": "X射线辐射禁区(R=15m)"
+    },
+    {
+      "id": "ZONE-CLEAN-01",
+      "type": "clean_room",
+      "shape": "rectangle",
+      "origin": [43000, 24000],
+      "size": [12000, 10000],
+      "description": "恒温检测区(20±0.5°C)",
+      "temperature": {"target": 20.0, "tolerance": 0.5}
+    },
+    {
+      "id": "ZONE-CHEM-01",
+      "type": "hazmat",
+      "shape": "rectangle",
+      "origin": [78000, 24000],
+      "size": [8000, 8000],
+      "description": "密封胶配制间(危化品)"
+    },
+    {
+      "id": "ZONE-FOD-01",
+      "type": "fod",
+      "shape": "rectangle",
+      "origin": [1000, 1000],
+      "size": [148000, 78000],
+      "description": "全厂FOD管控区"
+    },
+    {
+      "id": "ZONE-AGV-01",
+      "type": "agv_path",
+      "shape": "rectangle",
+      "origin": [3000, 56000],
+      "size": [144000, 4000],
+      "description": "AGV转运通道(不可放置固定设备)"
+    },
+    {
+      "id": "ZONE-FIRE-01",
+      "type": "fire_escape",
+      "shape": "rectangle",
+      "origin": [50000, 0],
+      "size": [4000, 80000],
+      "description": "消防通道"
+    },
+    {
+      "id": "ZONE-FIRE-02",
+      "type": "fire_escape",
+      "shape": "rectangle",
+      "origin": [100000, 0],
+      "size": [4000, 80000],
+      "description": "消防通道"
+    }
+  ],
+  "crane_tracks": [
+    {
+      "id": "CRANE-20T-A",
+      "capacity_ton": 20,
+      "y_position": 68000,
+      "x_range": [3000, 147000],
+      "span": 30000
+    },
+    {
+      "id": "CRANE-10T-B",
+      "capacity_ton": 10,
+      "y_position": 38000,
+      "x_range": [3000, 147000],
+      "span": 20000
+    },
+    {
+      "id": "CRANE-20T-C",
+      "capacity_ton": 20,
+      "y_position": 20000,
+      "x_range": [3000, 147000],
+      "span": 30000
+    }
+  ],
+  "assets": [
+    {
+      "asset_guid": "EQ-201",
+      "name": "自动钻铆机-01",
+      "pos_x": 10000, "pos_y": 62000,
+      "width": 8000, "height": 4000,
+      "safety_zone": 2000,
+      "weight_kg": 25000,
+      "power_kw": 150,
+      "movable": false,
+      "crane_required": "10T"
+    },
+    {
+      "asset_guid": "EQ-202",
+      "name": "自动钻铆机-02",
+      "pos_x": 22000, "pos_y": 62000,
+      "width": 8000, "height": 4000,
+      "safety_zone": 2000,
+      "weight_kg": 25000,
+      "power_kw": 150,
+      "movable": false,
+      "crane_required": "10T"
+    },
+    {
+      "asset_guid": "EQ-203",
+      "name": "框段铆接机-03",
+      "pos_x": 34000, "pos_y": 62000,
+      "width": 6000, "height": 4000,
+      "safety_zone": 1500,
+      "weight_kg": 18000,
+      "power_kw": 100,
+      "movable": false
+    },
+    {
+      "asset_guid": "EQ-204",
+      "name": "手动铆接台-04",
+      "pos_x": 44000, "pos_y": 62000,
+      "width": 6000, "height": 3000,
+      "safety_zone": 1000,
+      "weight_kg": 2000,
+      "power_kw": 5,
+      "movable": true
+    },
+    {
+      "asset_guid": "EQ-210",
+      "name": "对接型架(20m×6m)",
+      "pos_x": 30000, "pos_y": 42000,
+      "width": 20000, "height": 6000,
+      "safety_zone": 3000,
+      "weight_kg": 30000,
+      "power_kw": 5,
+      "movable": false,
+      "crane_required": "20T"
+    },
+    {
+      "asset_guid": "EQ-211",
+      "name": "激光跟踪仪-L",
+      "pos_x": 25000, "pos_y": 50000,
+      "width": 2000, "height": 1500,
+      "safety_zone": 500,
+      "weight_kg": 50,
+      "power_kw": 0.5,
+      "movable": true,
+      "vibration_limit_mm": 0.01
+    },
+    {
+      "asset_guid": "EQ-212",
+      "name": "激光跟踪仪-R",
+      "pos_x": 52000, "pos_y": 50000,
+      "width": 2000, "height": 1500,
+      "safety_zone": 500,
+      "weight_kg": 50,
+      "power_kw": 0.5,
+      "movable": true,
+      "vibration_limit_mm": 0.01
+    },
+    {
+      "asset_guid": "EQ-222",
+      "name": "NDT-X射线",
+      "pos_x": 30000, "pos_y": 26000,
+      "width": 6000, "height": 4000,
+      "safety_zone": 15000,
+      "weight_kg": 12000,
+      "power_kw": 100,
+      "movable": false,
+      "radiation_zone": true
+    },
+    {
+      "asset_guid": "EQ-223",
+      "name": "恒温检测间(CMM)",
+      "pos_x": 45000, "pos_y": 26000,
+      "width": 8000, "height": 6000,
+      "safety_zone": 1000,
+      "weight_kg": 8000,
+      "power_kw": 5,
+      "movable": false,
+      "temperature_control": {"target": 20.0, "tolerance": 0.5}
+    },
+    {
+      "asset_guid": "EQ-230",
+      "name": "管路预装-A",
+      "pos_x": 10000, "pos_y": 10000,
+      "width": 8000, "height": 5000,
+      "safety_zone": 1200,
+      "weight_kg": 5000,
+      "power_kw": 10,
+      "movable": true
+    },
+    {
+      "asset_guid": "EQ-231",
+      "name": "电缆布线-B",
+      "pos_x": 25000, "pos_y": 10000,
+      "width": 8000, "height": 5000,
+      "safety_zone": 1200,
+      "weight_kg": 3000,
+      "power_kw": 5,
+      "movable": true
+    },
+    {
+      "asset_guid": "EQ-232",
+      "name": "系统集成-C",
+      "pos_x": 40000, "pos_y": 10000,
+      "width": 8000, "height": 5000,
+      "safety_zone": 1200,
+      "weight_kg": 5000,
+      "power_kw": 15,
+      "movable": true
+    },
+    {
+      "asset_guid": "EQ-233",
+      "name": "功能测试-D",
+      "pos_x": 55000, "pos_y": 10000,
+      "width": 8000, "height": 5000,
+      "safety_zone": 1200,
+      "weight_kg": 4000,
+      "power_kw": 20,
+      "movable": true
+    }
+  ],
+  "collision_test_scenarios": [
+    {
+      "test_id": "COL-TC01",
+      "description": "将EQ-204移入NDT辐射禁区",
+      "action": {"move": "EQ-204", "new_pos": [28000, 30000]},
+      "expected": "zone_violation:ZONE-NDT-01"
+    },
+    {
+      "test_id": "COL-TC02",
+      "description": "将EQ-230移动使其与EQ-231重叠",
+      "action": {"move": "EQ-230", "new_pos": [22000, 10000]},
+      "expected": "collision:EQ-230,EQ-231"
+    },
+    {
+      "test_id": "COL-TC03",
+      "description": "将EQ-232移入AGV通道",
+      "action": {"move": "EQ-232", "new_pos": [40000, 55000]},
+      "expected": "zone_violation:ZONE-AGV-01"
+    },
+    {
+      "test_id": "COL-TC04",
+      "description": "将EQ-211(激光跟踪仪)移至钻铆机旁(振动冲突)",
+      "action": {"move": "EQ-211", "new_pos": [12000, 62000]},
+      "expected": "constraint_violation:vibration_limit"
+    },
+    {
+      "test_id": "COL-TC05",
+      "description": "将EQ-233移入消防通道",
+      "action": {"move": "EQ-233", "new_pos": [50000, 10000]},
+      "expected": "zone_violation:ZONE-FIRE-01"
+    }
+  ]
+}

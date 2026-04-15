@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Interactive Role Workflows · 5 Roles Prototype</title>
+  <style>
+    :root{
+      --bg:#f4f7fb; --card:#fff; --primary:#0284C8; --accent:#10B981; --muted:#64748B;
+      --radius:10px; --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
+    }
+    *{box-sizing:border-box}
+    body{font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:var(--bg); color:#0f172a; margin:0; padding:24px;}
+    .wrap{max-width:1200px; margin:0 auto;}
+    header{display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:18px;}
+    h1{font-size:20px; margin:0 0 2px 0;}
+    p.lead{margin:0; color:var(--muted); font-size:13px;}
+    .controls{display:flex; gap:8px; align-items:center;}
+    select.role-select{padding:8px 12px; border-radius:8px; border:1px solid rgba(15,23,42,0.08); font-weight:600;}
+    button.btn{padding:8px 12px; border-radius:8px; border:0; cursor:pointer; font-weight:600;}
+    button.primary{background:var(--primary); color:#fff;}
+    button.ghost{background:transparent; border:1px solid rgba(15,23,42,0.06); color:var(--primary);}
+    .grid{display:grid; grid-template-columns: 1fr 420px; gap:18px; align-items:start;}
+    .card{background:var(--card); border-radius:var(--radius); padding:16px; box-shadow:0 6px 18px rgba(2,6,23,0.04);}
+    .workflow{display:flex; gap:12px; align-items:center; margin-bottom:12px;}
+    .step-pill{padding:8px 10px; border-radius:999px; background:rgba(2,132,200,0.06); color:var(--primary); font-weight:700; font-size:13px;}
+    .player{display:flex; gap:8px; align-items:center; margin-bottom:12px;}
+    .timeline{height:8px; background:rgba(2,6,23,0.06); border-radius:999px; width:100%; position:relative; overflow:hidden;}
+    .progress{height:100%; background:linear-gradient(90deg,var(--primary),var(--accent)); width:0%; transition:width 0.4s linear;}
+    .step-list{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;}
+    .step-card{min-width:140px; max-width:220px; padding:10px; border-radius:8px; background:linear-gradient(180deg,#fff,#fcfeff); border:1px solid rgba(2,6,23,0.04); cursor:pointer;}
+    .step-card.active{box-shadow:0 6px 18px rgba(2,132,200,0.12); border-color:var(--primary); transform:translateY(-4px);}
+    .detail h3{margin:0 0 8px 0; font-size:16px}
+    .io{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+    .io pre{background:#f8fafc padding:8px; border-radius:6px; font-family:var(--mono); font-size:12px; margin:0; border:1px solid rgba(2,6,23,0.04); padding:10px; white-space:pre-wrap;}
+    .meta{margin-top:10px; font-size:13px; color:var(--muted);}
+    .value{margin-top:12px; padding:10px; background:linear-gradient(90deg, rgba(16,185,129,0.06), rgba(2,132,200,0.04)); border-radius:8px; font-weight:600; color:#064e3b;}
+    footer{margin-top:18px; font-size:13px; color:var(--muted);}
+    .kbd{background:#0f172a;color:#fff;padding:6px 8px;border-radius:6px;font-family:var(--mono); font-size:12px;}
+    /* responsive */
+    @media (max-width:980px){ .grid{grid-template-columns:1fr; } .card{padding:14px} }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Interactive Role Workflows · 5 Roles 原型</h1>
+        <p class="lead">选择角色后，播放器会逐步展示该角色的标准操作流程（每步：输入 → 操作 → 输出 → 价值）。</p>
+      </div>
+      <div class="controls">
+        <label for="role" style="display:none">角色</label>
+        <select id="role" class="role-select" aria-label="选择角色"></select>
+        <button id="play" class="btn primary">播放</button>
+        <button id="pause" class="btn ghost">暂停</button>
+        <button id="reset" class="btn">重置</button>
+      </div>
+    </header>
+
+    <section class="grid">
+      <div>
+        <div class="card">
+          <div class="workflow">
+            <div class="step-pill" id="role-pill">角色</div>
+            <div style="color:var(--muted); font-size:13px;" id="role-desc">角色职责说明</div>
+          </div>
+
+          <div class="player">
+            <button id="prev" class="btn">上一步</button>
+            <div style="flex:1">
+              <div class="timeline" aria-hidden>
+                <div class="progress" id="progress"></div>
+              </div>
+              <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-top:6px;">
+                <div id="step-index">0 / 0</div>
+                <div id="step-time">00:00</div>
+              </div>
+            </div>
+            <button id="next" class="btn">下一步</button>
+          </div>
+
+          <div class="step-list" id="step-list"></div>
+
+          <div class="detail card" style="margin-top:12px;">
+            <h3 id="step-title">步骤标题</h3>
+            <div id="step-desc" style="color:var(--muted); margin-bottom:10px;">步骤简要说明</div>
+
+            <div class="io" id="io-section">
+              <div>
+                <div style="font-weight:700; margin-bottom:6px;">输入 (Input)</div>
+                <pre id="input-sample">-</pre>
+              </div>
+              <div>
+                <div style="font-weight:700; margin-bottom:6px;">输出 (Output)</div>
+                <pre id="output-sample">-</pre>
+              </div>
+            </div>
+
+            <div class="meta" id="meta-section">
+              <div><strong>责任人：</strong><span id="actors">-</span></div>
+              <div><strong>前置条件：</strong><span id="preconds">-</span></div>
+              <div><strong>耗时估计：</strong><span id="eta">-</span></div>
+            </div>
+
+            <div class="value" id="value-section">步骤的业务价值点</div>
+          </div>
+        </div>
+
+        <footer>
+          提示：你可以把该 HTML 文件发给业务方做演示；我可基于你想要强调的 KPI/Token 进一步定制每步的细化动作与示例数据。
+        </footer>
+      </div>
+
+      <aside>
+        <div class="card">
+          <h3 style="margin-top:0">角色一览 / 快速进入</h3>
+          <div id="role-cards" style="display:grid; gap:10px; margin-top:10px"></div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <h3 style="margin-top:0">角色摘要</h3>
+          <div id="role-summary" style="font-size:13px; color:var(--muted); margin-top:8px"></div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <h3 style="margin-top:0">示例按键</h3>
+          <div style="display:flex; gap:8px; margin-top:8px">
+            <div class="kbd">Space 播放/暂停</div>
+            <div class="kbd">← 上一步</div>
+            <div class="kbd">→ 下一步</div>
+          </div>
+        </div>
+      </aside>
+    </section>
+  </div>
+
+<script>
+// Define workflows for 5 roles (in Chinese), each step has title, desc, inputs, outputs, actors, preconds, eta, value
+const workflows = {
+  "LAYOUT_ENGINEER": {
+    "label":"布局工程师",
+    "desc":"在约束与底图已锁定的基础上生成、验证和交付最优布局候选方案，并申请 Gate C 锁版。",
+    "steps":[
+      {"title":"领取任务 & 准备数据","desc":"从任务队列领取布局任务，加载 SiteModel(CP-A) 与 ConstraintSet(CP-B)。","inputs":"SiteModel (DWG/IFC) + ConstraintSet JSON + ProjectContext","outputs":"Local working copy of SiteModel + Candidate config","actors":"布局工程师","preconds":"CP-A 有效 && CP-B 有效","eta":"10-30 分钟","value":"确保基于已验证数据进行设计，避免下游返工。"},
+      {"title":"自动生成候选方案","desc":"系统批量生成 N 个候选布局（约束驱动）并打分。","inputs":"Candidate generation params, Constraint engine","outputs":"候选列表 (LC-001..LC-N) + score","actors":"布局系统 + 布局工程师","preconds":"SiteModel/Constraints loaded","eta":"1-10 分钟","value":"快速得到多解并量化比较，节省人工探索时间。"},
+      {"title":"逐候选检查与人工微调","desc":"人工复查高评分候选，进行微调（位置/朝向/站位面积）。","inputs":"候选方案 geometry + 约束违规报告","outputs":"修订候选方案","actors":"布局工程师","preconds":"候选已生成","eta":"20-90 分钟","value":"把自动化结果变成可实施方案，融合工程经验。"},
+      {"title":"吊运路径 & 干涉检测","desc":"对选中方案进行吊运路径冲突检测与工况验证。","inputs":"候选 geometry + Crane model + Kinematic rules","outputs":"干涉检测报告 (pass/fail)","actors":"布局工程师","preconds":"候选方案稳定","eta":"5-20 分钟","value":"避免现场设备冲突，降低实施风险。"},
+      {"title":"约束验证 & 生成证据链","desc":"运行硬约束校验并生成证据（供审计与审批）。","inputs":"候选方案, ConstraintSet, Validator","outputs":"验证报告 + 指纹/快照","actors":"布局工程师","preconds":"干涉检测通过","eta":"3-10 分钟","value":"生成可审计证据，为锁版与审批提供机器可验证依据。"},
+      {"title":"申请 Gate C & 提交审批","desc":"封装候选与验证证据，发起 Gate C 审批流程。","inputs":"验证快照 + 最优候选 metadata","outputs":"审批申请 (Gate C), LAYOUT_LOCK 请求","actors":"布局工程师 -> 项目经理审批","preconds":"硬约束 0 违规 && 证据完整","eta":"提交即刻，审批等待 1-240 小时","value":"将方案推入决策链，触发下游仿真及最终批准。"
+      }
+    ]
+  },
+  "PROCESS_ENGINEER": {
+    "label":"工艺工程师",
+    "desc":"将工艺文档转为结构化约束、仲裁冲突并签发 CP-B，保证约束集的工程一致性。",
+    "steps":[
+      {"title":"接收 SiteModel 依赖","desc":"确认 SiteModel (CP-A) 已就绪并加载相关图层与标注。","inputs":"SiteModel (with CP-A token), 工艺文档原件","outputs":"工作副本 + 初步约束列表","actors":"工艺工程师","preconds":"CP-A 有效","eta":"10-30 分钟","value":"确保工艺约束有正确的空间语义来源。"},
+      {"title":"解析工艺文档 (MBD/Doc)","desc":"使用 MBD/文档解析器转换为 ConstraintSet 候选项。","inputs":"PDF/DWG/IFC/MBD 文档","outputs":"Constraint candidates (JSON)","actors":"系统 + 工艺工程师","preconds":"文档上传并可解析","eta":"2-20 分钟","value":"把非结构化工艺转换为机器可读约束，便于自动校验。"},
+      {"title":"冲突检测与仲裁","desc":"针对候选约束运行冲突检测，人工仲裁复杂冲突。","inputs":"Constraint candidates + SiteModel","outputs":"Resolved ConstraintSet + Conflict log","actors":"工艺工程师","preconds":"Constraint candidates ready","eta":"15-60 分钟","value":"避免不同工艺间相互矛盾，减少后续排错成本。"},
+      {"title":"签发 CP-B (约束锁版)","desc":"当约束集满足前置条件时签发 CP-B Token，解锁布局模块。","inputs":"Resolved ConstraintSet, Review evidence","outputs":"CP-B Token (CONSTRAINTSET_LOCK)","actors":"工艺工程师 / 系统","preconds":"冲突已解决 && 证据完整","eta":"即时","value":"形成可信约束边界，保证布局不会破坏工艺要求。"},
+      {"title":"变更管理 & 回溯","desc":"处理后续变更请求并维护版本序列与审计日志。","inputs":"变更请求, 审计记录","outputs":"ConstraintSet 新版本或回滚","actors":"工艺工程师, 审计员","preconds":"变更触发","eta":"视变更复杂度","value":"保证约束变更可追溯并降低风险。"}
+    ]
+  },
+  "SIM_ENGINEER": {
+    "label":"仿真工程师",
+    "desc":"基于锁版布局执行脉动仿真，识别瓶颈并签发 SIM_APPROVAL (CP-D)。",
+    "steps":[
+      {"title":"准备仿真输入","desc":"抓取已锁版 Layout (CP-C)、ConstraintSet、工艺节拍与资源模型。","inputs":"Layout (CP-C), ConstraintSet, Resource profiles","outputs":"Sim job spec","actors":"仿真工程师","preconds":"CP-C 有效","eta":"5-20 分钟","value":"确保仿真基于最新可信数据，结果可被信任。"},
+      {"title":"配置参数与场景","desc":"设置仿真参数（节拍、运行工况、误差模型）。","inputs":"Sim job spec + 参数配置表","outputs":"可重复的仿真场景","actors":"仿真工程师","preconds":"Sim job spec ready","eta":"5-30 分钟","value":"支持多场景对比，评估方案鲁棒性。"},
+      {"title":"运行仿真并收集结果","desc":"执行离散事件/脉动仿真，收集 throughput、utilization、bottlenecks。","inputs":"仿真场景","outputs":"SimResult (结构化) + logs","actors":"仿真系统, 仿真工程师","preconds":"场景已配置","eta":"10-120 分钟","value":"预测线体性能与潜在瓶颈，避免投产风险。"},
+      {"title":"结果评审与建议","desc":"评估仿真输出，给出改进建议或回退指引。","inputs":"SimResult, layout candidates","outputs":"Recommendation report, decision artifacts","actors":"仿真工程师, 布局/工艺工程师","preconds":"SimResult available","eta":"15-60 分钟","value":"把仿真证据转化为可执行改进项，降低实施不确定性。"},
+      {"title":"签发 CP-D (SIM_APPROVAL)","desc":"当仿真满足 KPI 时签发 CP-D，解锁决策工作台。","inputs":"Recommendation report, SimResult","outputs":"CP-D Token (SIM_APPROVAL)","actors":"仿真工程师","preconds":"KPI 满足或接受的偏差","eta":"即时","value":"提供可信的仿真背书，使决策有据可依。"}
+    ]
+  },
+  "PROJECT_MANAGER": {
+    "label":"项目经理 / 总工程师",
+    "desc":"对全链路的关键 Gate（Gate C/D）进行审批，合并证据并做最终决策（生成 CP-E）。",
+    "steps":[
+      {"title":"接收审批请求","desc":"收到来自布局/仿真/工艺的审批申请与证据快照。","inputs":"Gate申请 + 验证快照 (CP-A..D)","outputs":"待审清单","actors":"项目经理","preconds":"申请提交","eta":"即时查看，审理视情况","value":"集中把控项目风险并承担最终责任。"},
+      {"title":"审阅证据链与快照","desc":"逐项验证证据完整性（token 有效性、快照指纹）。","inputs":"Snapshots, Token statuses, Audit logs","outputs":"审阅结论或退回意见","actors":"项目经理, 审计支持","preconds":"快照可访问","eta":"15-90 分钟","value":"保证审批基于不可篡改证据，符合法规与公司流程。"},
+      {"title":"召开跨职能评审（必要时）","desc":"组织布局/工艺/仿真等进行评审，解决争议。","inputs":"审阅问题列表","outputs":"一致性决议或改进需求","actors":"项目经理, 各工程师","preconds":"证据存在分歧","eta":"30-180 分钟","value":"确保决策具有跨职能共识，降低实施冲突。"},
+      {"title":"批准决策并签发 CP-E","desc":"在满足条件时批准并生成最终决策令牌，写入审计链。","inputs":"审阅结论, 会议纪要","outputs":"CP-E (Decision_Final) + Snapshot","actors":"项目经理","preconds":"无严重阻断风险","eta":"即时","value":"终止设计周期并授权投产准备，形成不可篡改的决策记录。"},
+      {"title":"发布实施指令 & 跟踪","desc":"将批准方案下发到执行团队并跟踪关键 KPI。","inputs":"CP-E, Decision doc","outputs":"实施计划, 监控仪表板","actors":"项目经理, 施工团队","preconds":"CP-E issued","eta":"持续跟踪","value":"确保批准落地并持续可见项目健康状态。"}
+    ]
+  },
+  "AUDITOR": {
+    "label":"合规审查员",
+    "desc":"独立核查审计链与决策证据，导出不可篡改报告供监管与内审使用。",
+    "steps":[
+      {"title":"检索审计链与快照","desc":"根据时间/事件检索相关 Decision 与 Token 快照。","inputs":"Audit index, Token IDs, Project ID","outputs":"证据集","actors":"审计员","preconds":"有审计权限","eta":"5-30 分钟","value":"保证有完整证据支持后续审计或合规检查。"},
+      {"title":"验证证据完整性","desc":"校验 token 指纹、快照哈希、操作时间线一致性。","inputs":"Snapshots, Token states, Audit logs","outputs":"验证报告","actors":"审计员, 系统工具","preconds":"证据集已抓取","eta":"10-60 分钟","value":"防止篡改并保证追责链的有效性。"},
+      {"title":"生成合规报告","desc":"把验证结果打包成标准化审计报告（含证据引用）。","inputs":"验证报告, 原始快照","outputs":"审计报告 (PDF/JSON)","actors":"审计员","preconds":"验证通过或记录异常","eta":"5-60 分钟","value":"提供监管/内部治理所需的可交付物。"},
+      {"title":"导出证据链 & 事件复盘","desc":"当有争议或监管要求时导出可验证证据链。","inputs":"审计日志, 事件 ID","outputs":"证据包 (signed)","actors":"审计员","preconds":"正式请求","eta":"视请求而定","value":"在合规调查时可以快速提供不可篡改证据。"},
+      {"title":"建议改进与监控规则","desc":"基于审计结果建议流程/系统改进并创建监控告警。","inputs":"审计总结","outputs":"改进建议, 告警规则","actors":"审计员, SRE","preconds":"审计完成","eta":"视复杂度","value":"降低未来违规概率，提高审计效率。"}
+    ]
+  }
+};
+
+// initial setup
+const roleSelect = document.getElementById('role');
+const roleCards = document.getElementById('role-cards');
+const roleSummary = document.getElementById('role-summary');
+const rolePill = document.getElementById('role-pill');
+const roleDesc = document.getElementById('role-desc');
+const stepList = document.getElementById('step-list');
+const stepTitle = document.getElementById('step-title');
+const stepDesc = document.getElementById('step-desc');
+const inputSample = document.getElementById('input-sample');
+const outputSample = document.getElementById('output-sample');
+const actorsEl = document.getElementById('actors');
+const precondsEl = document.getElementById('preconds');
+const etaEl = document.getElementById('eta');
+const valueEl = document.getElementById('value-section');
+const progressEl = document.getElementById('progress');
+const stepIndex = document.getElementById('step-index');
+const stepTime = document.getElementById('step-time');
+const playBtn = document.getElementById('play');
+const pauseBtn = document.getElementById('pause');
+const resetBtn = document.getElementById('reset');
+const prevBtn = document.getElementById('prev');
+const nextBtn = document.getElementById('next');
+
+let currentRole = null;
+let currentIndex = 0;
+let timer = null;
+let playSpeed = 2500; // ms per step
+
+function init(){
+  // populate role select and cards
+  Object.keys(workflows).forEach((key)=>{
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = workflows[key].label;
+    roleSelect.appendChild(opt);
+
+    const c = document.createElement('div');
+    c.className='role-mini';
+    c.innerHTML = `<button class="btn ghost" style="width:100%; text-align:left;" onclick="selectRole('${key}')">${workflows[key].label}</button>`;
+    roleCards.appendChild(c);
+  });
+
+  roleSelect.addEventListener('change', ()=>{
+    selectRole(roleSelect.value);
+  });
+
+  // keyboard shortcuts
+  document.addEventListener('keydown', (e)=>{
+    if(e.code==='Space'){ e.preventDefault(); togglePlay(); }
+    if(e.key==='ArrowLeft'){ prevStep(); }
+    if(e.key==='ArrowRight'){ nextStep(); }
+  });
+
+  // buttons
+  playBtn.addEventListener('click', ()=>startPlay());
+  pauseBtn.addEventListener('click', ()=>pausePlay());
+  resetBtn.addEventListener('click', ()=>reset());
+  prevBtn.addEventListener('click', ()=>prevStep());
+  nextBtn.addEventListener('click', ()=>nextStep());
+
+  // default to first role
+  const first = Object.keys(workflows)[0];
+  roleSelect.value = first;
+  selectRole(first);
+}
+
+function selectRole(key){
+  currentRole = key;
+  currentIndex = 0;
+  const wf = workflows[key];
+  rolePill.textContent = wf.label;
+  roleDesc.textContent = wf.desc;
+  roleSummary.innerHTML = `<strong>${wf.label}</strong><div style="margin-top:8px; color:var(--muted)">${wf.desc}</div>`;
+  populateSteps(wf.steps);
+  renderStep();
+}
+
+// populate small step cards
+function populateSteps(steps){
+  stepList.innerHTML='';
+  steps.forEach((s,i)=>{
+    const el = document.createElement('div');
+    el.className='step-card';
+    el.dataset.index = i;
+    el.innerHTML = `<div style="font-weight:700; margin-bottom:6px;">${i+1}. ${s.title}</div><div style="font-size:12px; color:var(--muted)">${s.desc.slice(0,80)}</div>`;
+    el.addEventListener('click', ()=>{ currentIndex = i; renderStep(); pausePlay(); });
+    stepList.appendChild(el);
+  });
+  updateProgress();
+}
+
+// update UI for current step
+function renderStep(){
+  const wf = workflows[currentRole];
+  const step = wf.steps[currentIndex];
+  const cards = document.querySelectorAll('.step-card');
+  cards.forEach(c=>c.classList.toggle('active', Number(c.dataset.index)===currentIndex));
+  stepTitle.textContent = `${currentIndex+1}. ${step.title}`;
+  stepDesc.textContent = step.desc;
+  inputSample.textContent = step.inputs;
+  outputSample.textContent = step.outputs;
+  actorsEl.textContent = step.actors;
+  precondsEl.textContent = step.preconds || '—';
+  etaEl.textContent = step.eta || '—';
+  valueEl.textContent = step.value || '—';
+  stepIndex.textContent = `${currentIndex+1} / ${wf.steps.length}`;
+  // faux time estimate display
+  stepTime.textContent = step.eta || '';
+  updateProgress();
+}
+
+// update progress bar
+function updateProgress(){
+  const wf = workflows[currentRole];
+  const pct = ((currentIndex+1)/wf.steps.length)*100;
+  progressEl.style.width = pct + '%';
+}
+
+// play control
+function startPlay(){
+  if(timer) return;
+  playBtn.disabled = true;
+  pauseBtn.disabled = false;
+  timer = setInterval(()=>{
+    currentIndex++;
+    const wf = workflows[currentRole];
+    if(currentIndex >= wf.steps.length){ pausePlay(); currentIndex = wf.steps.length-1; return; }
+    renderStep();
+  }, playSpeed);
+}
+
+function pausePlay(){
+  playBtn.disabled = false;
+  pauseBtn.disabled = true;
+  if(timer){ clearInterval(timer); timer = null; }
+}
+
+function togglePlay(){ if(timer) pausePlay(); else startPlay(); }
+
+function reset(){ pausePlay(); currentIndex=0; renderStep(); }
+
+function prevStep(){ pausePlay(); if(currentIndex>0) currentIndex--; renderStep(); }
+function nextStep(){ pausePlay(); const wf=workflows[currentRole]; if(currentIndex < wf.steps.length-1) currentIndex++; renderStep(); }
+
+// expose selectRole for inline buttons
+window.selectRole = selectRole;
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,1418 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工艺产线设计 - Multi-Agent 协同闭环</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        
+        .agent-card {
+            border-left: 4px solid;
+            transition: all 0.3s ease;
+        }
+        .agent-card.active { transform: scale(1.02); }
+        .agent-card.agent1 { border-left-color: #3b82f6; }
+        .agent-card.agent1.active { box-shadow: 0 0 20px rgba(59, 130, 246, 0.25); }
+        .agent-card.agent2 { border-left-color: #f59e0b; }
+        .agent-card.agent2.active { box-shadow: 0 0 20px rgba(245, 158, 11, 0.25); }
+        .agent-card.agent3 { border-left-color: #10b981; }
+        .agent-card.agent3.active { box-shadow: 0 0 20px rgba(16, 185, 129, 0.25); }
+        
+        .agent-header-band { padding: 10px 24px; margin: -24px -24px 16px -24px; border-radius: 8px 8px 0 0; display: flex; align-items: center; gap: 8px; }
+        .agent-card.agent1 .agent-header-band { background: linear-gradient(135deg, #eff6ff, #dbeafe); }
+        .agent-card.agent2 .agent-header-band { background: linear-gradient(135deg, #fffbeb, #fef3c7); }
+        .agent-card.agent3 .agent-header-band { background: linear-gradient(135deg, #ecfdf5, #d1fae5); }
+        .agent-header-band .agent-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: white; flex-shrink: 0; }
+        .agent-card.agent1 .agent-icon { background: #3b82f6; }
+        .agent-card.agent2 .agent-icon { background: #f59e0b; }
+        .agent-card.agent3 .agent-icon { background: #10b981; }
+        
+        .agent-card.agent1 .insight-box { background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-left-color: #3b82f6; }
+        .agent-card.agent2 .insight-box { background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border-left-color: #f59e0b; }
+        .agent-card.agent3 .insight-box { background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border-left-color: #10b981; }
+        
+        .risk-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .risk-high { background: #fee2e2; color: #991b1b; }
+        .risk-medium { background: #fef3c7; color: #92400e; }
+        .risk-low { background: #dcfce7; color: #166534; }
+        
+        .proposal-item {
+            padding: 12px;
+            border-radius: 8px;
+            background: #f0f9ff;
+            border: 1px solid #e0f2fe;
+            margin: 8px 0;
+        }
+        .proposal-item.selected {
+            background: #dbeafe;
+            border-color: #3b82f6;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+        }
+        
+        .step-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+        .step-dot {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .step-dot.active { background: #3b82f6; transform: scale(1.2); }
+        .step-dot.pending { background: #d1d5db; }
+        .step-dot.done { background: #10b981; }
+        .step-line {
+            flex: 1;
+            height: 2px;
+            background: #d1d5db;
+            margin: 0 12px;
+        }
+        .step-line.active { background: #3b82f6; }
+        
+        .agent-loop {
+            position: relative;
+            padding: 20px;
+            background: #f9fafb;
+            border-radius: 12px;
+            border: 2px dashed #d1d5db;
+        }
+        .loop-indicator {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 0 8px;
+            color: #666;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .action-button {
+            transition: all 0.3s ease;
+        }
+        .action-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+        .action-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .insight-box {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border-left: 4px solid #3b82f6;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 12px 0;
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin: 12px 0;
+        }
+        .metric-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #3b82f6;
+        }
+        .metric-label {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+        
+        .timeline {
+            position: relative;
+            padding-left: 40px;
+        }
+        .timeline-item {
+            position: relative;
+            padding-bottom: 20px;
+        }
+        .timeline-item:before {
+            content: '';
+            position: absolute;
+            left: -30px;
+            top: 0;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #3b82f6;
+            border: 3px solid white;
+        }
+        .timeline-item:after {
+            content: '';
+            position: absolute;
+            left: -24px;
+            top: 12px;
+            width: 2px;
+            height: calc(100% + 8px);
+            background: #d1d5db;
+        }
+        .timeline-item:last-child:after {
+            display: none;
+        }
+        
+        .3d-preview {
+            width: 100%;
+            height: 400px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+            position: relative;
+            overflow: hidden;
+        }
+        .3d-preview.ready {
+            background: #f0f9ff;
+            color: #1e293b;
+        }
+        .3d-canvas {
+            width: 100%;
+            height: 100%;
+            background: #e0f2fe;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            font-family: monospace;
+            position: relative;
+        }
+        
+        .decision-panel {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.show {
+            display: flex;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #e5e7eb;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .flow-arrow {
+            text-align: center;
+            font-size: 24px;
+            color: #9ca3af;
+            margin: 12px 0;
+        }
+
+        /* MCP Context Trace */
+        .mcp-trace { margin-top: 12px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+        .mcp-trace summary { padding: 8px 12px; font-size: 11px; font-weight: 600; color: #6b7280; cursor: pointer; background: #f9fafb; letter-spacing: 0.3px; }
+        .mcp-trace summary:hover { background: #f3f4f6; }
+        .mcp-trace-body { padding: 10px 12px; font-size: 10px; font-family: 'SF Mono', 'Cascadia Code', monospace; background: #fafbfc; }
+        .mcp-trace-row { display: flex; gap: 8px; padding: 3px 0; border-bottom: 1px solid #f3f4f6; }
+        .mcp-trace-key { color: #6b7280; min-width: 110px; flex-shrink: 0; }
+        .mcp-trace-val { color: #1e293b; word-break: break-all; }
+        .mcp-trace-val.ctx-id { color: #7c3aed; font-weight: 600; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+            <div class="max-w-7xl mx-auto px-6 py-4">
+                <h1 class="text-2xl font-bold text-gray-900">工艺产线设计系统</h1>
+                <p class="text-gray-600 text-sm mt-1">Multi-Agent 协同优化闭环演示</p>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-6 py-8">
+            
+            <!-- Step Indicator -->
+            <div class="step-indicator mb-8">
+                <div class="flex items-center flex-1">
+                    <div class="step-dot active" id="step1-dot">1</div>
+                    <div class="step-line"></div>
+                    <div class="step-dot pending" id="step2-dot">2</div>
+                    <div class="step-line"></div>
+                    <div class="step-dot pending" id="step3-dot">3</div>
+                </div>
+                <div class="text-right">
+                    <p class="text-sm text-gray-600" id="step-label">第一步：导入CAD文件</p>
+                </div>
+            </div>
+
+            <!-- Step 1: Import CAD -->
+            <section id="step1" class="mb-8">
+                <h2 class="text-xl font-bold text-gray-900 mb-6">第一步：导入工艺产线 CAD 文件</h2>
+                
+                <div class="bg-white rounded-lg shadow p-8 border-2 border-dashed border-blue-300">
+                    <div class="text-center">
+                        <svg class="w-16 h-16 mx-auto text-blue-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        <p class="text-gray-700 font-semibold mb-4">拖拽或点击选择 DWG / IFC / STEP 文件</p>
+                        <p class="text-gray-500 text-sm mb-6">支持文件大小：< 500MB</p>
+                        <button onclick="startImport()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-lg action-button">
+                            选择文件进行演示
+                        </button>
+                    </div>
+                    
+                    <div id="import-status" class="mt-6 hidden">
+                        <div class="flex items-center gap-3 text-sm">
+                            <div class="loading-spinner"></div>
+                            <span id="status-text">正在预处理 CAD 文件...</span>
+                        </div>
+                        <div class="mt-4 text-gray-600">
+                            <p class="text-sm">✓ 文件读取完成</p>
+                            <p class="text-sm">✓ 坐标标准化完成</p>
+                            <p class="text-sm">✓ 几何拓扑修补完成</p>
+                            <p class="text-sm">→ 触发 Agent1 语义识别...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="insight-box mt-6">
+                    <p class="font-semibold text-gray-900 mb-2">系统导入能力</p>
+                    <div class="text-sm text-gray-700 space-y-1">
+                        <p><strong>格式支持：</strong>DWG (R14–R2024) / IFC 2×3–4 / STEP AP214/AP242 / DXF，自动版本检测与转换</p>
+                        <p><strong>几何修补：</strong>拓扑修复精度 ±0.01mm，自动闭合开放 Polyline、剥离重叠图元</p>
+                        <p><strong>坐标标准化：</strong>WCS/UCS 统一、单位归一 (mm)、原点校准 (Reference Points)</p>
+                        <p><strong>图层映射：</strong>自动匹配 AeroOntology-v1.0 本体词表，未识别图层标记为 UNRESOLVED 待人工确认</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Step 2: Multi-Agent Loop -->
+            <section id="step2" class="mb-8 hidden">
+                <h2 class="text-xl font-bold text-gray-900 mb-6">第二步：Multi-Agent 协同优化（循环）</h2>
+                
+                <p class="text-gray-600 mb-4">系统自动触发三个 Agent 的协同循环，直到找到满足所有约束的最优方案。</p>
+
+                <!-- Iteration Banner -->
+                <div id="iteration-banner" style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:linear-gradient(90deg,#eff6ff,#f0fdf4);border:1px solid #dbeafe;border-radius:8px;margin-bottom:16px">
+                    <div style="font-size:12px;font-weight:700;color:#3b82f6">ROUND <span id="iter-count">1</span></div>
+                    <div style="flex:1;height:1px;background:#d1d5db"></div>
+                    <div id="iter-status" style="font-size:11px;color:#6b7280">首轮分析中</div>
+                </div>
+
+                <!-- Diff Panel (hidden until Round 2) -->
+                <div id="diff-panel" class="hidden" style="margin-bottom:16px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+                    <div style="padding:8px 12px;background:#f9fafb;font-size:11px;font-weight:700;color:#374151;border-bottom:1px solid #e5e7eb">
+                        Round 1 → Round 2 变化 (Diff)
+                    </div>
+                    <div style="padding:12px;font-size:11px;font-family:'SF Mono',monospace">
+                        <div style="padding:4px 8px;background:#fef2f2;border-left:3px solid #ef4444;margin-bottom:4px;border-radius:0 4px 4px 0">
+                            <span style="color:#ef4444;font-weight:600">- </span>焊接枪 B 坐标: (150.5, <strong style="color:#ef4444">680.3</strong>, 45.0) · 间距: <strong style="color:#ef4444">480mm</strong>
+                        </div>
+                        <div style="padding:4px 8px;background:#f0fdf4;border-left:3px solid #22c55e;margin-bottom:8px;border-radius:0 4px 4px 0">
+                            <span style="color:#22c55e;font-weight:600">+ </span>焊接枪 B 坐标: (150.5, <strong style="color:#22c55e">715.3</strong>, 45.0) · 间距: <strong style="color:#22c55e">515mm</strong>
+                        </div>
+                        <div style="padding:4px 8px;background:#fef2f2;border-left:3px solid #ef4444;margin-bottom:4px;border-radius:0 4px 4px 0">
+                            <span style="color:#ef4444;font-weight:600">- </span>C-001 硬约束: <strong style="color:#ef4444">VIOLATED</strong> (480mm < 500mm)
+                        </div>
+                        <div style="padding:4px 8px;background:#f0fdf4;border-left:3px solid #22c55e;margin-bottom:8px;border-radius:0 4px 4px 0">
+                            <span style="color:#22c55e;font-weight:600">+ </span>C-001 硬约束: <strong style="color:#22c55e">SATISFIED</strong> (515mm ≥ 500mm)
+                        </div>
+                        <div style="padding:4px 8px;background:#fef2f2;border-left:3px solid #ef4444;margin-bottom:4px;border-radius:0 4px 4px 0">
+                            <span style="color:#ef4444;font-weight:600">- </span>物流路径利用率: <strong style="color:#ef4444">0.68</strong>
+                        </div>
+                        <div style="padding:4px 8px;background:#f0fdf4;border-left:3px solid #22c55e;border-radius:0 4px 4px 0">
+                            <span style="color:#22c55e;font-weight:600">+ </span>物流路径利用率: <strong style="color:#22c55e">0.92</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Agent 1: CAD Semantic Recognition -->
+                <div class="agent-card agent1 bg-white rounded-lg shadow p-6 mb-6 active" id="agent1-card">
+                    <div class="agent-header-band">
+                        <div class="agent-icon">A1</div>
+                        <div style="flex:1">
+                            <h3 class="text-lg font-bold text-gray-900" style="margin:0">Agent1：本体识别</h3>
+                            <p class="text-gray-600 text-sm" style="margin:0">语义标签抽取与映射 · ParseAgent</p>
+                        </div>
+                        <span class="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-semibold">处理中...</span>
+                    </div>
+                    
+                    <div class="insight-box">
+                        <p class="font-semibold text-gray-900 mb-3">识别任务：</p>
+                        <ul class="text-sm text-gray-700 space-y-2">
+                            <li>✓ 识别所有设备及类型（焊接枪、传送带、检测站...）</li>
+                            <li>✓ 提取几何关键点（吊点、插孔、限制区）</li>
+                            <li>✓ 映射到工业本体（Ontology）</li>
+                            <li>✓ 生成置信度评分（用于人工审核）</li>
+                        </ul>
+                    </div>
+
+                    <div class="mt-6">
+                        <p class="font-semibold text-gray-900 mb-3">识别结果 — Ontology 图谱：</p>
+                        
+                        <!-- Role Tab Switcher -->
+                        <div style="display:flex;gap:0;margin-bottom:12px;border-bottom:2px solid #e5e7eb">
+                            <button onclick="switchOntologyRole('graph')" id="tab-graph" style="padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid #3b82f6;margin-bottom:-2px;color:#3b82f6">图谱视图</button>
+                            <button onclick="switchOntologyRole('mgmt')" id="tab-mgmt" style="padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:#6b7280">管理视角</button>
+                            <button onclick="switchOntologyRole('tech')" id="tab-tech" style="padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:#6b7280">技术视角</button>
+                        </div>
+
+                        <!-- Ontology Graph View -->
+                        <div id="ontology-graph">
+                            <p class="text-xs text-gray-500 mb-3" style="font-style:italic">Ontology 图谱可视化：节点 = 实体对象，边 = 语义关系（APPLIES_TO / GOVERNED_BY / FEEDS / PAIR_WITH / TRAVERSES）</p>
+                            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:8px;overflow:hidden">
+                                <svg viewBox="0 0 720 420" style="width:100%;height:auto" xmlns="http://www.w3.org/2000/svg">
+                                    <defs>
+                                        <marker id="og-arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#94a3b8"/></marker>
+                                        <marker id="og-arrow-red" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#ef4444"/></marker>
+                                        <marker id="og-arrow-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#3b82f6"/></marker>
+                                        <marker id="og-arrow-amber" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#f59e0b"/></marker>
+                                        <marker id="og-arrow-purple" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#8b5cf6"/></marker>
+                                        <filter id="og-shadow" x="-4%" y="-4%" width="108%" height="108%"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.08"/></filter>
+                                    </defs>
+
+                                    <!-- ═══ EDGES (drawn first, behind nodes) ═══ -->
+                                    
+                                    <!-- 焊接枪A APPLIES_TO → Station-01 -->
+                                    <line x1="130" y1="168" x2="180" y2="95" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#og-arrow-blue)" opacity="0.7"/>
+                                    <text x="140" y="127" font-size="7" fill="#3b82f6" font-family="sans-serif" transform="rotate(-40,140,127)">APPLIES_TO</text>
+
+                                    <!-- 焊接枪B APPLIES_TO → Station-01 -->
+                                    <line x1="280" y1="168" x2="230" y2="95" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#og-arrow-blue)" opacity="0.7"/>
+                                    <text x="268" y="127" font-size="7" fill="#3b82f6" font-family="sans-serif" transform="rotate(40,268,127)">APPLIES_TO</text>
+
+                                    <!-- 焊接枪A ↔ 焊接枪B PAIR_WITH -->
+                                    <line x1="168" y1="190" x2="252" y2="190" stroke="#3b82f6" stroke-width="1.8" stroke-dasharray="4,2"/>
+                                    <rect x="180" y="182" width="60" height="14" rx="3" fill="white" stroke="#bfdbfe" stroke-width="0.5"/>
+                                    <text x="210" y="192" font-size="7" fill="#3b82f6" text-anchor="middle" font-weight="600" font-family="sans-serif">PAIR_WITH</text>
+
+                                    <!-- 传送带 TRAVERSES → Zone-Main -->
+                                    <line x1="470" y1="208" x2="555" y2="262" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#og-arrow-amber)" opacity="0.7"/>
+                                    <text x="520" y="230" font-size="7" fill="#f59e0b" font-family="sans-serif" transform="rotate(30,520,230)">TRAVERSES</text>
+
+                                    <!-- 传送带 FEEDS → Station-01 -->
+                                    <line x1="430" y1="170" x2="245" y2="90" stroke="#f59e0b" stroke-width="1.2" marker-end="url(#og-arrow-amber)" stroke-dasharray="5,3" opacity="0.6"/>
+                                    <text x="340" y="118" font-size="7" fill="#f59e0b" font-family="sans-serif">FEEDS</text>
+
+                                    <!-- 传送带 FEEDS → Station-02 -->
+                                    <line x1="490" y1="170" x2="490" y2="95" stroke="#f59e0b" stroke-width="1.2" marker-end="url(#og-arrow-amber)" stroke-dasharray="5,3" opacity="0.6"/>
+                                    <text x="498" y="135" font-size="7" fill="#f59e0b" font-family="sans-serif">FEEDS</text>
+
+                                    <!-- 焊接枪A GOVERNED_BY → C-001 -->
+                                    <line x1="115" y1="210" x2="162" y2="298" stroke="#ef4444" stroke-width="1.2" marker-end="url(#og-arrow-red)" opacity="0.6"/>
+                                    <text x="122" y="258" font-size="7" fill="#ef4444" font-family="sans-serif" transform="rotate(66,122,258)">GOVERNED_BY</text>
+
+                                    <!-- 焊接枪B GOVERNED_BY → C-001 -->
+                                    <line x1="278" y1="210" x2="228" y2="298" stroke="#ef4444" stroke-width="1.2" marker-end="url(#og-arrow-red)" opacity="0.6"/>
+                                    <text x="266" y="258" font-size="7" fill="#ef4444" font-family="sans-serif" transform="rotate(-66,266,258)">GOVERNED_BY</text>
+
+                                    <!-- C-001 GOVERNED_BY → HB/Z 223 -->
+                                    <line x1="195" y1="332" x2="195" y2="370" stroke="#94a3b8" stroke-width="1" marker-end="url(#og-arrow)" opacity="0.5"/>
+                                    <text x="203" y="356" font-size="6" fill="#94a3b8" font-family="sans-serif">REF</text>
+
+                                    <!-- C-045 APPLIES_TO → 传送带 -->
+                                    <line x1="460" y1="298" x2="460" y2="216" stroke="#ef4444" stroke-width="1.2" marker-end="url(#og-arrow-red)" opacity="0.6"/>
+                                    <text x="468" y="260" font-size="7" fill="#ef4444" font-family="sans-serif">APPLIES_TO</text>
+
+                                    <!-- 吊点P1 MOUNTED_ON → Station-01 (loose link) -->
+                                    <path d="M 640 175 Q 660 100 245 82" fill="none" stroke="#8b5cf6" stroke-width="1" marker-end="url(#og-arrow-purple)" stroke-dasharray="4,3" opacity="0.5"/>
+                                    <text x="500" y="68" font-size="7" fill="#8b5cf6" font-family="sans-serif">LOCATED_IN</text>
+
+                                    <!-- ═══ ZONE NODES (top row) ═══ -->
+
+                                    <!-- Station-01 -->
+                                    <rect x="140" y="55" width="110" height="36" rx="6" fill="white" stroke="#94a3b8" stroke-width="1.5" filter="url(#og-shadow)"/>
+                                    <rect x="140" y="55" width="110" height="12" rx="6" fill="#f1f5f9"/>
+                                    <text x="195" y="64" font-size="7" fill="#64748b" text-anchor="middle" font-family="sans-serif" font-weight="600">Zone</text>
+                                    <text x="195" y="82" font-size="9" fill="#1e293b" text-anchor="middle" font-weight="700" font-family="sans-serif">Station-01</text>
+
+                                    <!-- Station-02 -->
+                                    <rect x="435" y="55" width="110" height="36" rx="6" fill="white" stroke="#94a3b8" stroke-width="1.5" filter="url(#og-shadow)"/>
+                                    <rect x="435" y="55" width="110" height="12" rx="6" fill="#f1f5f9"/>
+                                    <text x="490" y="64" font-size="7" fill="#64748b" text-anchor="middle" font-family="sans-serif" font-weight="600">Zone</text>
+                                    <text x="490" y="82" font-size="9" fill="#1e293b" text-anchor="middle" font-weight="700" font-family="sans-serif">Station-02</text>
+
+                                    <!-- Zone-Main -->
+                                    <rect x="555" y="260" width="110" height="36" rx="6" fill="white" stroke="#94a3b8" stroke-width="1.5" filter="url(#og-shadow)"/>
+                                    <rect x="555" y="260" width="110" height="12" rx="6" fill="#f1f5f9"/>
+                                    <text x="610" y="269" font-size="7" fill="#64748b" text-anchor="middle" font-family="sans-serif" font-weight="600">Zone</text>
+                                    <text x="610" y="287" font-size="9" fill="#1e293b" text-anchor="middle" font-weight="700" font-family="sans-serif">Zone-Main</text>
+
+                                    <!-- ═══ ASSET NODES (middle row) ═══ -->
+
+                                    <!-- 焊接枪 A -->
+                                    <rect x="68" y="165" width="100" height="44" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.8" filter="url(#og-shadow)"/>
+                                    <text x="118" y="180" font-size="9" fill="#1e40af" text-anchor="middle" font-weight="700" font-family="sans-serif">焊接枪 A</text>
+                                    <text x="118" y="192" font-size="7" fill="#3b82f6" text-anchor="middle" font-family="monospace">MDI-2024-001</text>
+                                    <text x="118" y="203" font-size="7" fill="#6b7280" text-anchor="middle" font-family="sans-serif">98%</text>
+
+                                    <!-- 焊接枪 B -->
+                                    <rect x="250" y="165" width="100" height="44" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.8" filter="url(#og-shadow)"/>
+                                    <text x="300" y="180" font-size="9" fill="#1e40af" text-anchor="middle" font-weight="700" font-family="sans-serif">焊接枪 B</text>
+                                    <text x="300" y="192" font-size="7" fill="#3b82f6" text-anchor="middle" font-family="monospace">MDI-2024-002</text>
+                                    <text x="300" y="203" font-size="7" fill="#6b7280" text-anchor="middle" font-family="sans-serif">97%</text>
+
+                                    <!-- 传送带 Main -->
+                                    <rect x="405" y="165" width="110" height="44" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.8" filter="url(#og-shadow)"/>
+                                    <text x="460" y="180" font-size="9" fill="#92400e" text-anchor="middle" font-weight="700" font-family="sans-serif">传送带 Main</text>
+                                    <text x="460" y="192" font-size="7" fill="#f59e0b" text-anchor="middle" font-family="monospace">MDI-2024-003</text>
+                                    <text x="460" y="203" font-size="7" fill="#6b7280" text-anchor="middle" font-family="sans-serif">96%</text>
+
+                                    <!-- 吊点 P1 (amber border = needs review) -->
+                                    <rect x="590" y="165" width="100" height="44" rx="8" fill="#ede9fe" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4,2" filter="url(#og-shadow)"/>
+                                    <text x="640" y="180" font-size="9" fill="#6d28d9" text-anchor="middle" font-weight="700" font-family="sans-serif">吊点 P1</text>
+                                    <text x="640" y="192" font-size="7" fill="#8b5cf6" text-anchor="middle" font-family="monospace">LIFT-001</text>
+                                    <text x="640" y="203" font-size="7" fill="#d97706" text-anchor="middle" font-weight="600" font-family="sans-serif">85% !</text>
+
+                                    <!-- ═══ CONSTRAINT NODES (bottom row) ═══ -->
+
+                                    <!-- C-001 -->
+                                    <rect x="140" y="298" width="110" height="36" rx="6" fill="#fef2f2" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="5,2" filter="url(#og-shadow)"/>
+                                    <text x="195" y="313" font-size="8" fill="#991b1b" text-anchor="middle" font-weight="700" font-family="sans-serif">C-001 间距</text>
+                                    <text x="195" y="326" font-size="7" fill="#ef4444" text-anchor="middle" font-family="sans-serif">HARD · ≥500mm</text>
+
+                                    <!-- C-045 -->
+                                    <rect x="405" y="298" width="110" height="36" rx="6" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5,2" filter="url(#og-shadow)"/>
+                                    <text x="460" y="313" font-size="8" fill="#92400e" text-anchor="middle" font-weight="700" font-family="sans-serif">C-045 物流</text>
+                                    <text x="460" y="326" font-size="7" fill="#d97706" text-anchor="middle" font-family="sans-serif">SOFT · ≥0.85</text>
+
+                                    <!-- HB/Z 223-2013 (standard reference) -->
+                                    <rect x="140" y="370" width="110" height="28" rx="4" fill="#f9fafb" stroke="#d1d5db" stroke-width="1"/>
+                                    <text x="195" y="383" font-size="7" fill="#6b7280" text-anchor="middle" font-family="sans-serif">HB/Z 223-2013</text>
+                                    <text x="195" y="393" font-size="6" fill="#9ca3af" text-anchor="middle" font-family="sans-serif">航空焊接安全标准</text>
+
+                                    <!-- ═══ LEGEND ═══ -->
+                                    <g transform="translate(14,350)">
+                                        <text x="0" y="0" font-size="8" fill="#6b7280" font-weight="600" font-family="sans-serif">图例</text>
+                                        <rect x="0" y="8" width="14" height="8" rx="2" fill="#dbeafe" stroke="#3b82f6" stroke-width="0.8"/>
+                                        <text x="18" y="15" font-size="7" fill="#6b7280" font-family="sans-serif">加工设备</text>
+                                        <rect x="0" y="22" width="14" height="8" rx="2" fill="#fef3c7" stroke="#f59e0b" stroke-width="0.8"/>
+                                        <text x="18" y="29" font-size="7" fill="#6b7280" font-family="sans-serif">物流设备</text>
+                                        <rect x="0" y="36" width="14" height="8" rx="2" fill="#ede9fe" stroke="#8b5cf6" stroke-width="0.8"/>
+                                        <text x="18" y="43" font-size="7" fill="#6b7280" font-family="sans-serif">基础设施</text>
+                                        <rect x="0" y="50" width="14" height="8" rx="2" fill="#fef2f2" stroke="#ef4444" stroke-width="0.8" stroke-dasharray="3,1"/>
+                                        <text x="18" y="57" font-size="7" fill="#6b7280" font-family="sans-serif">约束</text>
+                                        <rect x="0" y="64" width="14" height="8" rx="2" fill="#f9fafb" stroke="#d1d5db" stroke-width="0.8"/>
+                                        <text x="18" y="71" font-size="7" fill="#6b7280" font-family="sans-serif">标准/区域</text>
+                                    </g>
+
+                                    <!-- Stats badge -->
+                                    <rect x="560" y="360" width="150" height="48" rx="6" fill="white" stroke="#e5e7eb" stroke-width="1"/>
+                                    <text x="635" y="376" font-size="8" fill="#374151" text-anchor="middle" font-weight="600" font-family="sans-serif">Ontology Stats</text>
+                                    <text x="635" y="390" font-size="7" fill="#6b7280" text-anchor="middle" font-family="sans-serif">Nodes: 7 · Links: 9 · Types: 5</text>
+                                    <text x="635" y="402" font-size="7" fill="#6b7280" text-anchor="middle" font-family="sans-serif">Confidence avg: 94% · Low: 1</text>
+                                </svg>
+                            </div>
+                            <div style="margin-top:8px;padding:8px 12px;background:#f0f9ff;border:1px solid #e0f2fe;border-radius:6px;font-size:11px;color:#374151">
+                                <strong>图谱摘要：</strong>7 个本体节点 · 9 条语义关系 · 5 种实体类型 · 吊点 P1 置信度 85% 以虚线边框标注（需复核）
+                            </div>
+                        </div>
+
+                        <!-- Management Role View -->
+                        <div id="ontology-mgmt" style="display:none">
+                            <p class="text-xs text-gray-500 mb-3" style="font-style:italic">项目/生产管理者视角：关注资产清单、合规状态、成本与进度影响</p>
+                            
+                            <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e5e7eb">产线设备资产 (3)</div>
+                            <div class="space-y-2 mb-4">
+                                <div class="proposal-item" style="display:flex;justify-content:space-between;align-items:center">
+                                    <div>
+                                        <p class="font-semibold text-gray-900">焊接枪 A</p>
+                                        <p class="text-xs text-gray-600">类型: WeldingGun · MDI: MDI-2024-001 · 状态: 在役</p>
+                                    </div>
+                                    <div style="text-align:right">
+                                        <span class="risk-badge risk-low">置信度 98%</span>
+                                        <p class="text-xs text-green-700 mt-1">合规</p>
+                                    </div>
+                                </div>
+                                <div class="proposal-item" style="display:flex;justify-content:space-between;align-items:center">
+                                    <div>
+                                        <p class="font-semibold text-gray-900">焊接枪 B</p>
+                                        <p class="text-xs text-gray-600">类型: WeldingGun · MDI: MDI-2024-002 · 状态: 在役</p>
+                                    </div>
+                                    <div style="text-align:right">
+                                        <span class="risk-badge risk-low">置信度 97%</span>
+                                        <p class="text-xs text-green-700 mt-1">合规</p>
+                                    </div>
+                                </div>
+                                <div class="proposal-item" style="display:flex;justify-content:space-between;align-items:center">
+                                    <div>
+                                        <p class="font-semibold text-gray-900">传送带 Main</p>
+                                        <p class="text-xs text-gray-600">类型: Conveyor · MDI: MDI-2024-003 · 长度: 2500mm</p>
+                                    </div>
+                                    <div style="text-align:right">
+                                        <span class="risk-badge risk-low">置信度 96%</span>
+                                        <p class="text-xs text-green-700 mt-1">合规</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e5e7eb">基础设施 (1)</div>
+                            <div class="space-y-2 mb-4">
+                                <div class="proposal-item" style="display:flex;justify-content:space-between;align-items:center;border-color:#fde68a" id="mgmt-p1">
+                                    <div>
+                                        <p class="font-semibold text-gray-900">吊点 P1</p>
+                                        <p class="text-xs text-gray-600">类型: LiftingPoint · 承重: 5t · 位置: 梁 B2</p>
+                                    </div>
+                                    <div style="text-align:right">
+                                        <span class="risk-badge risk-medium">置信度 85%</span>
+                                        <p class="text-xs text-amber-700 mt-1">需复核</p>
+                                        <div style="margin-top:6px;display:flex;gap:4px">
+                                            <button onclick="markReview('P1')" style="font-size:9px;padding:3px 8px;border:1px solid #f59e0b;color:#92400e;background:#fef3c7;border-radius:4px;cursor:pointer;font-weight:600">标记复核</button>
+                                            <button onclick="correctType('P1')" style="font-size:9px;padding:3px 8px;border:1px solid #d1d5db;color:#374151;background:white;border-radius:4px;cursor:pointer">修正类型</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="padding:8px 12px;background:#f0f9ff;border:1px solid #e0f2fe;border-radius:6px;font-size:11px;color:#374151">
+                                <strong>管理摘要：</strong>资产共 4 项 · 高置信 3 项 · 需复核 1 项 · 预计不影响交付节点
+                            </div>
+                        </div>
+
+                        <!-- Technical Role View -->
+                        <div id="ontology-tech" style="display:none">
+                            <p class="text-xs text-gray-500 mb-3" style="font-style:italic">工艺/结构工程师视角：关注几何参数、坐标、拓扑关系、约束映射</p>
+                            
+                            <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e5e7eb">加工设备 — Ontology: Equipment (2)</div>
+                            <div class="space-y-2 mb-4">
+                                <div class="proposal-item">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <p class="font-semibold text-gray-900">焊接枪 A <span style="font-size:10px;color:#6b7280;font-weight:400">asset_guid: MDI-2024-001</span></p>
+                                            <p class="text-xs text-gray-600">坐标: (150.5, 200.3, 45.0) · Footprint: 800×600mm · Port: WELD_TIP</p>
+                                            <p class="text-xs text-blue-600 mt-1">Links: APPLIES_TO → Station-01, GOVERNED_BY → C-001 (间距约束)</p>
+                                        </div>
+                                        <span class="risk-badge risk-low">98%</span>
+                                    </div>
+                                </div>
+                                <div class="proposal-item">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <p class="font-semibold text-gray-900">焊接枪 B <span style="font-size:10px;color:#6b7280;font-weight:400">asset_guid: MDI-2024-002</span></p>
+                                            <p class="text-xs text-gray-600">坐标: (150.5, 680.3, 45.0) · Footprint: 800×600mm · Port: WELD_TIP</p>
+                                            <p class="text-xs text-blue-600 mt-1">Links: APPLIES_TO → Station-01, PAIR_WITH → MDI-2024-001 (间距 480mm)</p>
+                                        </div>
+                                        <span class="risk-badge risk-low">97%</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e5e7eb">物流设备 — Ontology: Conveyor (1)</div>
+                            <div class="space-y-2 mb-4">
+                                <div class="proposal-item">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <p class="font-semibold text-gray-900">传送带 Main <span style="font-size:10px;color:#6b7280;font-weight:400">asset_guid: MDI-2024-003</span></p>
+                                            <p class="text-xs text-gray-600">长度: 2500mm · 高度: 850mm · Polyline: 12 segments · Direction: X+</p>
+                                            <p class="text-xs text-blue-600 mt-1">Links: TRAVERSES → Zone-Main, FEEDS → Station-01 → Station-02</p>
+                                        </div>
+                                        <span class="risk-badge risk-low">96%</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e5e7eb">结构基础设施 — Ontology: LiftingPoint (1)</div>
+                            <div class="space-y-2 mb-4">
+                                <div class="proposal-item" id="tech-p1" style="border-color:#fde68a">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <p class="font-semibold text-gray-900">吊点 P1 <span style="font-size:10px;color:#6b7280;font-weight:400">asset_guid: LIFT-001</span></p>
+                                            <p class="text-xs text-gray-600">位置: 梁 B2 · 坐标: (800, 150, 5500) · 承重: 5t · 图层: STRUCT_LIFT</p>
+                                            <p class="text-xs text-amber-600 mt-1">NOTICE: 图层名推断，未找到显式标注 — 需工程师验证</p>
+                                        </div>
+                                        <span class="risk-badge risk-medium">85%</span>
+                                    </div>
+                                    <div style="margin-top:8px;display:flex;gap:6px">
+                                        <button onclick="markReview('P1')" style="font-size:10px;padding:4px 10px;border:1px solid #f59e0b;color:#92400e;background:#fef3c7;border-radius:4px;cursor:pointer;font-weight:600">标记复核</button>
+                                        <button onclick="correctType('P1')" style="font-size:10px;padding:4px 10px;border:1px solid #d1d5db;color:#374151;background:white;border-radius:4px;cursor:pointer">修正类型</button>
+                                        <button onclick="overrideCoord('P1')" style="font-size:10px;padding:4px 10px;border:1px solid #d1d5db;color:#374151;background:white;border-radius:4px;cursor:pointer">修正坐标</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="padding:8px 12px;background:#f0f9ff;border:1px solid #e0f2fe;border-radius:6px;font-size:11px;color:#374151">
+                                <strong>技术摘要：</strong>Ontology 节点 4 · Links 6 · 几何完整度 92% · 吊点 P1 置信度低于 90%，建议现场复核梁 B2 标注
+                            </div>
+                        </div>
+                    </div>
+
+                    <details class="mcp-trace">
+                        <summary>MCP Context Trace — Agent1 Parse</summary>
+                        <div class="mcp-trace-body">
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">mcp_context_id</span><span class="mcp-trace-val ctx-id">ctx-7f3a-4e81-b2c9-001</span></div>
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">agent</span><span class="mcp-trace-val">ParseAgent / AeroSemantic-v2</span></div>
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">input_schema</span><span class="mcp-trace-val">{ cad_file: "wing_fal.dwg", format: "DWG", coord_system: "WCS" }</span></div>
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">output_schema</span><span class="mcp-trace-val">{ site_model_id: "SM-001", assets: 4, links: 6, unrecognized: 0 }</span></div>
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">timestamp</span><span class="mcp-trace-val">2026-04-14T09:12:34.567Z</span></div>
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">latency</span><span class="mcp-trace-val">2,340ms</span></div>
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">provenance</span><span class="mcp-trace-val">SOURCED_FROM → wing_fal.dwg (sha256:a3b8..f2e1)</span></div>
+                        </div>
+                    </details>
+
+                    <div class="mt-6 text-right">
+                        <button onclick="agent2Start()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg action-button text-sm">
+                            确认 → 传递给 Agent2
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flow-arrow">↓</div>
+
+                <!-- Agent 2: Constraint Compliance Risk -->
+                <div class="agent-card agent2 bg-white rounded-lg shadow p-6 mb-6" id="agent2-card">
+                    <div class="agent-header-band">
+                        <div class="agent-icon">A2</div>
+                        <div style="flex:1">
+                            <h3 class="text-lg font-bold text-gray-900" style="margin:0">Agent2：约束风险识别</h3>
+                            <p class="text-gray-600 text-sm" style="margin:0">基于工艺规范进行合规检查 · ConstraintAgent</p>
+                        </div>
+                        <span class="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-full font-semibold" id="agent2-status">待激活</span>
+                    </div>
+                    
+                    <div class="insight-box">
+                        <p class="font-semibold text-gray-900 mb-3">检查任务：</p>
+                        <ul class="text-sm text-gray-700 space-y-2">
+                            <li>✓ 对标工艺文档中的约束规范</li>
+                            <li>✓ 检测硬约束冲突（必须满足）</li>
+                            <li>✓ 评估软约束得分（可优化）</li>
+                            <li>✓ 生成风险清单与改进建议</li>
+                        </ul>
+                    </div>
+
+                    <div class="mt-6 hidden" id="agent2-results">
+                        <p class="font-semibold text-gray-900 mb-3">风险识别结果：</p>
+                        
+                        <div class="mb-4">
+                            <p class="text-sm font-semibold text-gray-900 mb-2">硬约束冲突（必须修复）：</p>
+                            <div class="space-y-2">
+                                <div class="p-3 border border-red-200 bg-red-50 rounded">
+                                    <div style="display:flex;justify-content:space-between;align-items:start">
+                                        <p class="text-sm font-semibold text-red-900">C-001: 设备间距不足</p>
+                                        <span style="font-size:9px;padding:2px 6px;background:#fee2e2;color:#991b1b;border-radius:3px;font-weight:700">HARD · VIOLATED</span>
+                                    </div>
+                                    <p class="text-xs text-red-700 mt-1">焊接枪 A (<code style="font-size:10px;background:#fecaca;padding:1px 4px;border-radius:2px">MDI-2024-001</code>) 与焊接枪 B (<code style="font-size:10px;background:#fecaca;padding:1px 4px;border-radius:2px">MDI-2024-002</code>) 的间距为 <strong>480mm</strong>，但规范要求 ≥ 500mm。</p>
+                                    <div style="margin-top:6px;padding:6px 8px;background:#fff5f5;border:1px solid #fecaca;border-radius:4px;font-size:10px">
+                                        <div style="color:#6b7280;margin-bottom:2px"><strong>约束来源：</strong>PRD-3 §2.1.4 设备安全间距规范 · authority: PMI_ENGINE(level=0)</div>
+                                        <div style="color:#6b7280"><strong>Ontology Link：</strong>C-001 <span style="color:#dc2626">APPLIES_TO</span> → MDI-2024-001, MDI-2024-002 · <span style="color:#dc2626">GOVERNED_BY</span> → HB/Z 223-2013</div>
+                                    </div>
+                                    <p class="text-xs text-red-700 mt-2"><strong>改进建议：</strong>将焊接枪 B 右移 ≥ 20mm → 间距 ≥ 500mm。</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <p class="text-sm font-semibold text-gray-900 mb-2">软约束评分（可优化）：</p>
+                            <div class="space-y-2">
+                                <div class="p-3 border border-yellow-200 bg-yellow-50 rounded">
+                                    <div style="display:flex;justify-content:space-between;align-items:start">
+                                        <p class="text-sm font-semibold text-yellow-900">C-045: 物流路径利用率</p>
+                                        <span style="font-size:9px;padding:2px 6px;background:#fef3c7;color:#92400e;border-radius:3px;font-weight:700">SOFT · SUBOPTIMAL</span>
+                                    </div>
+                                    <p class="text-xs text-yellow-700 mt-1">传送带 Main (<code style="font-size:10px;background:#fef9c3;padding:1px 4px;border-radius:2px">MDI-2024-003</code>) 当前利用率评分 <strong>0.68</strong>/1.0（目标 ≥ 0.85）。</p>
+                                    <div style="margin-top:6px;padding:6px 8px;background:#fffbeb;border:1px solid #fde68a;border-radius:4px;font-size:10px">
+                                        <div style="color:#6b7280;margin-bottom:2px"><strong>约束来源：</strong>SOP 蒙皮装配工艺规程 §6.5 物流通道规范 · authority: SOP/LLM(level=3)</div>
+                                        <div style="color:#6b7280"><strong>Ontology Link：</strong>C-045 <span style="color:#d97706">APPLIES_TO</span> → MDI-2024-003 · <span style="color:#d97706">TRAVERSES</span> → Zone-Main</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <p class="text-sm font-semibold text-gray-900 mb-2">合规状态：</p>
+                            <div class="metrics-grid">
+                                <div class="metric-card">
+                                    <div class="metric-value text-red-600">1</div>
+                                    <div class="metric-label">硬约束冲突</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-value text-yellow-600">2</div>
+                                    <div class="metric-label">可优化项</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-value text-green-600">12</div>
+                                    <div class="metric-label">已满足约束</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <details class="mcp-trace" id="agent2-trace" style="display:none">
+                        <summary>MCP Context Trace — Agent2 Constraint</summary>
+                        <div class="mcp-trace-body">
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">mcp_context_id</span><span class="mcp-trace-val ctx-id">ctx-7f3a-4e81-b2c9-002</span></div>
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">parent_context</span><span class="mcp-trace-val ctx-id">ctx-7f3a-4e81-b2c9-001 (Agent1)</span></div>
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">agent</span><span class="mcp-trace-val">ConstraintAgent / Z3-SAT + RuleEngine</span></div>
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">input_schema</span><span class="mcp-trace-val">{ site_model: "SM-001", constraint_set: "CS-001", assets: [MDI-2024-001..003, LIFT-001] }</span></div>
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">output_schema</span><span class="mcp-trace-val">{ hard_violations: 1, soft_scores: 2, passed: 12, sat_result: "UNSAT" }</span></div>
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">timestamp</span><span class="mcp-trace-val">2026-04-14T09:12:37.102Z</span></div>
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">latency</span><span class="mcp-trace-val">1,890ms</span></div>
+                        </div>
+                    </details>
+
+                    <div class="mt-6 text-right">
+                        <button onclick="agent3Start()" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-6 rounded-lg action-button text-sm" id="agent2-btn" disabled>
+                            确认风险 → 传递给 Agent3
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flow-arrow">↓</div>
+
+                <!-- Agent 3: Layout Optimization -->
+                <div class="agent-card agent3 bg-white rounded-lg shadow p-6 mb-6" id="agent3-card">
+                    <div class="agent-header-band">
+                        <div class="agent-icon">A3</div>
+                        <div style="flex:1">
+                            <h3 class="text-lg font-bold text-gray-900" style="margin:0">Agent3：布局方案优化</h3>
+                            <p class="text-gray-600 text-sm" style="margin:0">约束驱动的设计优化 · LayoutAgent</p>
+                        </div>
+                        <span class="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-full font-semibold" id="agent3-status">待激活</span>
+                    </div>
+                    
+                    <div class="insight-box">
+                        <p class="font-semibold text-gray-900 mb-3">优化任务：</p>
+                        <ul class="text-sm text-gray-700 space-y-2">
+                            <li>✓ 基于 Agent2 的风险反馈，自动生成修复方案</li>
+                            <li>✓ 探索设计空间（多个候选方案）</li>
+                            <li>✓ 计算每个方案的约束满足度</li>
+                            <li>✓ 推荐最优方案或供人工选择</li>
+                        </ul>
+                    </div>
+
+                    <div class="mt-6 hidden" id="agent3-results">
+                        <p class="font-semibold text-gray-900 mb-3">优化方案推荐：</p>
+                        
+                        <div class="space-y-3">
+                            <div class="proposal-item selected">
+                                <div class="flex justify-between items-start mb-2">
+                                    <p class="font-semibold text-gray-900">方案 A（推荐）</p>
+                                    <span class="risk-badge risk-low">评分 0.92</span>
+                                </div>
+                                <p class="text-xs text-gray-600 mb-2">所有硬约束满足 ✓ | 软约束评分 0.92 | 吊运高度 6.3m</p>
+                                <p class="text-xs text-gray-700"><strong>调整：</strong>焊接枪 B 右移 35mm → 间距达 515mm ✓</p>
+                            </div>
+
+                            <div class="proposal-item">
+                                <div class="flex justify-between items-start mb-2">
+                                    <p class="font-semibold text-gray-900">方案 B</p>
+                                    <span class="risk-badge risk-medium">评分 0.78</span>
+                                </div>
+                                <p class="text-xs text-gray-600 mb-2">所有硬约束满足 ✓ | 软约束评分 0.78 | 吊运高度 6.8m</p>
+                                <p class="text-xs text-gray-700"><strong>调整：</strong>整体左移 100mm → 但吊运高度增加</p>
+                            </div>
+
+                            <div class="proposal-item">
+                                <div class="flex justify-between items-start mb-2">
+                                    <p class="font-semibold text-gray-900">方案 C</p>
+                                    <span class="risk-badge risk-high">评分 0.65</span>
+                                </div>
+                                <p class="text-xs text-gray-600 mb-2">约束冲突 ✗ | 软约束评分 0.65 | 不推荐</p>
+                                <p class="text-xs text-gray-700"><strong>问题：</strong>吊点间隙不足，无法实施吊运</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p class="text-sm font-semibold text-gray-900 mb-3">Agent3 推理链 — Reasoning Chain (5 steps)：</p>
+                            <div style="font-size:11px">
+                                <div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px dashed #e5e7eb">
+                                    <span style="width:20px;height:20px;border-radius:50%;background:#10b981;color:white;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">1</span>
+                                    <div>
+                                        <span style="font-size:9px;padding:1px 5px;background:rgba(239,68,68,0.1);color:#ef4444;border-radius:3px;font-weight:700">INPUT</span>
+                                        接收 Agent2 硬约束冲突: C-001 (MDI-2024-001 ↔ MDI-2024-002 间距 480mm < 500mm)
+                                        <div style="font-size:9px;color:#6b7280;font-style:italic;margin-top:2px">Based: Agent2 输出 · mcp_context_id: ctx-...-002</div>
+                                    </div>
+                                </div>
+                                <div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px dashed #e5e7eb">
+                                    <span style="width:20px;height:20px;border-radius:50%;background:#10b981;color:white;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">2</span>
+                                    <div>
+                                        <span style="font-size:9px;padding:1px 5px;background:rgba(59,130,246,0.1);color:#3b82f6;border-radius:3px;font-weight:700">SEARCH</span>
+                                        在约束满足前提下搜索 1,000 个候选布局（遗传算法 + R-Tree 碰撞检测）
+                                        <div style="font-size:9px;color:#6b7280;font-style:italic;margin-top:2px">Based: PRD-3 §3.2 布局搜索策略 — 约束满足优先，评分最大化次之</div>
+                                    </div>
+                                </div>
+                                <div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px dashed #e5e7eb">
+                                    <span style="width:20px;height:20px;border-radius:50%;background:#10b981;color:white;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">3</span>
+                                    <div>
+                                        <span style="font-size:9px;padding:1px 5px;background:rgba(16,185,129,0.1);color:#10b981;border-radius:3px;font-weight:700">EVALUATE</span>
+                                        筛选: 847/1000 满足所有硬约束 → 按软约束加权评分排序 → Top3 候选
+                                        <div style="font-size:9px;color:#6b7280;font-style:italic;margin-top:2px">Based: PRD-3 §3.4 评分函数 = 0.4×间距合规 + 0.3×物流效率 + 0.2×吊运安全 + 0.1×扩展性</div>
+                                    </div>
+                                </div>
+                                <div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px dashed #e5e7eb">
+                                    <span style="width:20px;height:20px;border-radius:50%;background:#10b981;color:white;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">4</span>
+                                    <div>
+                                        <span style="font-size:9px;padding:1px 5px;background:rgba(168,85,247,0.1);color:#8b5cf6;border-radius:3px;font-weight:700">VERIFY</span>
+                                        方案 A: 焊接枪 B 右移 35mm → 间距 515mm (≥500mm) · 物流利用率 0.92 (≥0.85) · 吊运 6.3m (≤8m)
+                                        <div style="font-size:9px;color:#6b7280;font-style:italic;margin-top:2px">Based: Z3 SAT 求解器验证全约束可满足性 → result: SAT</div>
+                                    </div>
+                                </div>
+                                <div style="display:flex;gap:8px;padding:6px 0">
+                                    <span style="width:20px;height:20px;border-radius:50%;background:#10b981;color:white;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">5</span>
+                                    <div>
+                                        <span style="font-size:9px;padding:1px 5px;background:rgba(245,158,11,0.1);color:#f59e0b;border-radius:3px;font-weight:700">RECOMMEND</span>
+                                        方案 A 综合评分 0.92 (rank 1/847) · 无新增冲突 · 强烈推荐
+                                        <div style="font-size:9px;color:#6b7280;font-style:italic;margin-top:2px">Based:评分阈值 ≥ 0.80 为可接受, ≥ 0.90 为强烈推荐 (PRD-3 §4.1)</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="margin-top:8px;padding:6px 10px;border-radius:4px;background:rgba(16,185,129,0.08);border-left:3px solid #10b981;font-size:10px;font-weight:600;color:#374151">
+                                score(A) = 0.40×1.0 + 0.30×0.92 + 0.20×0.85 + 0.10×0.80 = <strong>0.92</strong> → STRONG RECOMMEND
+                            </div>
+                        </div>
+                    </div>
+
+                    <details class="mcp-trace" id="agent3-trace" style="display:none">
+                        <summary>MCP Context Trace — Agent3 Layout</summary>
+                        <div class="mcp-trace-body">
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">mcp_context_id</span><span class="mcp-trace-val ctx-id">ctx-7f3a-4e81-b2c9-003</span></div>
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">parent_context</span><span class="mcp-trace-val ctx-id">ctx-7f3a-4e81-b2c9-002 (Agent2)</span></div>
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">agent</span><span class="mcp-trace-val">LayoutAgent / R-Tree + GeneticOptimizer</span></div>
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">input_schema</span><span class="mcp-trace-val">{ violations: ["C-001"], soft_targets: ["C-045"], search_space: 1000 }</span></div>
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">output_schema</span><span class="mcp-trace-val">{ candidates: 3, best: "Plan-A", score: 0.92, hard_pass: true }</span></div>
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">timestamp</span><span class="mcp-trace-val">2026-04-14T09:12:39.445Z</span></div>
+                            <div class="mcp-trace-row"><span class="mcp-trace-key">latency</span><span class="mcp-trace-val">3,120ms</span></div>
+                        </div>
+                    </details>
+
+                    <div class="mt-6 text-right">
+                        <button onclick="agent3Decide()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg action-button text-sm" id="agent3-btn" disabled>
+                            接受方案 → 进入第三步渲染
+                        </button>
+                    </div>
+                </div>
+
+                <div class="insight-box mt-6">
+                    <p class="font-semibold text-gray-900 mb-2">系统协同能力</p>
+                    <div class="text-sm text-gray-700 space-y-1">
+                        <p><strong>闭环机制：</strong>感知 (Agent1) → 诊断 (Agent2) → 优化 (Agent3) 自动循环，每轮约束满足度单调递增直至收敛</p>
+                        <p><strong>约束求解：</strong>Z3 SAT 确保硬约束 100% 满足，软约束加权评分函数最大化 (PRD-3 §3.4)</p>
+                        <p><strong>MCP 可追溯：</strong>每个 Agent 输出携带 mcp_context_id，全链路可审计、可回溯</p>
+                        <p><strong>搜索空间：</strong>1,000+ 候选布局（遗传算法 + R-Tree 碰撞检测），收敛后输出 Top 3 方案</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Step 3: 3D Preview & Decision -->
+            <section id="step3" class="mb-8 hidden">
+                <h2 class="text-xl font-bold text-gray-900 mb-6">第三步：3D 渲染预览与决策</h2>
+
+                <div class="bg-white rounded-lg shadow p-6 mb-6">
+                    <p class="text-gray-600 mb-6">系统基于优化后的方案渲染 3D 效果。您可以实时查看设备布局、吊运路径、约束满足情况。</p>
+
+                    <div class="3d-preview ready" id="3d-container">
+                        <div style="width:100%;padding:24px">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                                <p class="text-sm font-semibold" style="color:#374151">产线布局 — 方案 A (优化后)</p>
+                                <div style="display:flex;gap:16px;font-size:10px;color:#6b7280">
+                                    <span><span style="display:inline-block;width:10px;height:10px;background:#3b82f6;border-radius:2px;margin-right:4px;vertical-align:middle"></span>加工设备</span>
+                                    <span><span style="display:inline-block;width:10px;height:10px;background:#f59e0b;border-radius:2px;margin-right:4px;vertical-align:middle"></span>物流设备</span>
+                                    <span><span style="display:inline-block;width:10px;height:10px;background:#8b5cf6;border-radius:2px;margin-right:4px;vertical-align:middle"></span>结构设施</span>
+                                    <span><span style="display:inline-block;width:10px;height:10px;background:#ef4444;border-radius:2px;margin-right:4px;vertical-align:middle"></span>约束标注</span>
+                                </div>
+                            </div>
+                            <svg viewBox="0 0 600 320" style="width:100%;height:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px" xmlns="http://www.w3.org/2000/svg">
+                                <!-- Grid -->
+                                <defs>
+                                    <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M 50 0 L 0 0 0 50" fill="none" stroke="#e2e8f0" stroke-width="0.5"/></pattern>
+                                </defs>
+                                <rect width="600" height="320" fill="url(#grid)"/>
+                                
+                                <!-- Workshop Boundary -->
+                                <rect x="30" y="20" width="540" height="280" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6,3" rx="4"/>
+                                <text x="40" y="14" font-size="9" fill="#94a3b8" font-family="sans-serif">Workshop Boundary (30m × 15m)</text>
+
+                                <!-- Conveyor Belt (Main) -->
+                                <rect x="60" y="145" width="480" height="30" rx="4" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+                                <line x1="80" y1="160" x2="520" y2="160" stroke="#f59e0b" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#arrowAmber)"/>
+                                <text x="270" y="163" font-size="9" fill="#92400e" text-anchor="middle" font-family="sans-serif" font-weight="600">传送带 Main · 2500mm · MDI-2024-003</text>
+                                <defs><marker id="arrowAmber" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><polygon points="0 0, 6 2, 0 4" fill="#f59e0b"/></marker></defs>
+
+                                <!-- Station 01 zone -->
+                                <rect x="60" y="40" width="220" height="95" rx="6" fill="rgba(59,130,246,0.04)" stroke="#bfdbfe" stroke-width="1"/>
+                                <text x="70" y="54" font-size="8" fill="#6b7280" font-family="sans-serif">STATION-01</text>
+
+                                <!-- Welding Gun A -->
+                                <rect x="80" y="65" width="70" height="50" rx="4" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+                                <text x="115" y="86" font-size="8" fill="#1e40af" text-anchor="middle" font-family="sans-serif" font-weight="600">焊接枪 A</text>
+                                <text x="115" y="97" font-size="7" fill="#6b7280" text-anchor="middle" font-family="monospace">MDI-001</text>
+
+                                <!-- Welding Gun B -->
+                                <rect x="190" y="65" width="70" height="50" rx="4" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+                                <text x="225" y="86" font-size="8" fill="#1e40af" text-anchor="middle" font-family="sans-serif" font-weight="600">焊接枪 B</text>
+                                <text x="225" y="97" font-size="7" fill="#6b7280" text-anchor="middle" font-family="monospace">MDI-002</text>
+
+                                <!-- Spacing annotation -->
+                                <line x1="150" y1="122" x2="190" y2="122" stroke="#22c55e" stroke-width="1.5"/>
+                                <line x1="150" y1="118" x2="150" y2="126" stroke="#22c55e" stroke-width="1"/>
+                                <line x1="190" y1="118" x2="190" y2="126" stroke="#22c55e" stroke-width="1"/>
+                                <rect x="155" y="125" width="30" height="12" rx="2" fill="#dcfce7" stroke="#22c55e" stroke-width="0.5"/>
+                                <text x="170" y="134" font-size="7" fill="#166534" text-anchor="middle" font-family="sans-serif" font-weight="700">515mm</text>
+
+                                <!-- Station 02 zone -->
+                                <rect x="320" y="40" width="220" height="95" rx="6" fill="rgba(59,130,246,0.04)" stroke="#bfdbfe" stroke-width="1"/>
+                                <text x="330" y="54" font-size="8" fill="#6b7280" font-family="sans-serif">STATION-02</text>
+
+                                <!-- Inspection Station -->
+                                <rect x="360" y="65" width="80" height="50" rx="4" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+                                <text x="400" y="86" font-size="8" fill="#1e40af" text-anchor="middle" font-family="sans-serif" font-weight="600">检测站</text>
+                                <text x="400" y="97" font-size="7" fill="#6b7280" text-anchor="middle" font-family="monospace">MDI-004</text>
+
+                                <!-- Lifting points -->
+                                <circle cx="170" cy="210" r="10" fill="#ede9fe" stroke="#8b5cf6" stroke-width="1.5"/>
+                                <text x="170" y="213" font-size="7" fill="#6d28d9" text-anchor="middle" font-weight="700" font-family="sans-serif">P1</text>
+                                <text x="170" y="230" font-size="7" fill="#6b7280" text-anchor="middle" font-family="sans-serif">吊点 · 5t · 梁B2</text>
+                                
+                                <circle cx="430" cy="210" r="10" fill="#ede9fe" stroke="#8b5cf6" stroke-width="1.5"/>
+                                <text x="430" y="213" font-size="7" fill="#6d28d9" text-anchor="middle" font-weight="700" font-family="sans-serif">P2</text>
+                                <text x="430" y="230" font-size="7" fill="#6b7280" text-anchor="middle" font-family="sans-serif">吊点 · 5t · 梁B5</text>
+
+                                <!-- Crane path -->
+                                <line x1="170" y1="210" x2="430" y2="210" stroke="#8b5cf6" stroke-width="1" stroke-dasharray="6,3"/>
+                                <text x="300" y="205" font-size="7" fill="#8b5cf6" text-anchor="middle" font-family="sans-serif">吊运路径 · H=6.3m</text>
+
+                                <!-- Constraint satisfied badges -->
+                                <rect x="60" y="250" width="200" height="18" rx="3" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="0.5"/>
+                                <text x="160" y="262" font-size="8" fill="#166534" text-anchor="middle" font-family="sans-serif">C-001 间距 ≥ 500mm SATISFIED</text>
+                                <rect x="280" y="250" width="200" height="18" rx="3" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="0.5"/>
+                                <text x="380" y="262" font-size="8" fill="#166534" text-anchor="middle" font-family="sans-serif">吊运高度 6.3m ≤ 8m SATISFIED</text>
+
+                                <!-- Flow arrows from conveyor to stations -->
+                                <line x1="170" y1="145" x2="170" y2="120" stroke="#f59e0b" stroke-width="1" marker-end="url(#arrowAmber)"/>
+                                <line x1="400" y1="145" x2="400" y2="120" stroke="#f59e0b" stroke-width="1" marker-end="url(#arrowAmber)"/>
+                                
+                                <!-- Compass -->
+                                <g transform="translate(545,285)">
+                                    <circle r="12" fill="white" stroke="#94a3b8" stroke-width="0.5"/>
+                                    <text x="0" y="-3" font-size="7" fill="#374151" text-anchor="middle" font-weight="700" font-family="sans-serif">N</text>
+                                    <line x1="0" y1="2" x2="0" y2="8" stroke="#94a3b8" stroke-width="0.5"/>
+                                </g>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 space-y-4">
+                        <div class="insight-box">
+                            <p class="font-semibold text-gray-900 mb-2">方案检查清单</p>
+                            <ul class="text-sm text-gray-700 space-y-2">
+                                <li class="flex items-center"><span class="text-green-600 mr-2">✓</span> 所有硬约束已满足</li>
+                                <li class="flex items-center"><span class="text-green-600 mr-2">✓</span> 软约束评分 0.92（目标 ≥ 0.80）</li>
+                                <li class="flex items-center"><span class="text-green-600 mr-2">✓</span> 吊运路径无干涉</li>
+                                <li class="flex items-center"><span class="text-green-600 mr-2">✓</span> 物流流畅性评分 0.88</li>
+                                <li class="flex items-center"><span class="text-green-600 mr-2">✓</span> 可执行性确认</li>
+                            </ul>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4">
+                            <div class="metric-card">
+                                <div class="metric-value text-green-600">0.92</div>
+                                <div class="metric-label">综合评分</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value text-blue-600">6.3m</div>
+                                <div class="metric-label">吊运高度</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value text-purple-600">2</div>
+                                <div class="metric-label">优化迭代</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="decision-panel">
+                        <button onclick="approve()" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg action-button">
+                            ✓ 同意方案 - 生成审批书
+                        </button>
+                        <button onclick="reject()" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg action-button">
+                            ✗ 不同意 - 返回优化
+                        </button>
+                    </div>
+                </div>
+
+                <div class="insight-box">
+                    <p class="font-semibold text-gray-900 mb-2">决策辅助能力</p>
+                    <div class="text-sm text-gray-700 space-y-1">
+                        <p><strong>全约束可视化：</strong>硬约束/软约束分层渲染，SVG 布局图实时标注间距、路径、当前状态 (SATISFIED / VIOLATED)</p>
+                        <p><strong>审计链完整：</strong>每项调整均关联 Reasoning Chain 步骤 + Based 规范引用 + mcp_context_id 可追溯</p>
+                        <p><strong>多方案对比：</strong>Top 3 方案并行展示评分、约束满足状态、变更 Diff，支持快速择优</p>
+                        <p><strong>一键审批：</strong>确认后自动生成审批报告 (PDF)，包含数字签名、约束清单、优化推理链、布局截图</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Final: Success / Loop Back -->
+            <section id="step4" class="mb-8 hidden">
+                <div class="bg-white rounded-lg shadow p-8 border-2 border-green-300 text-center">
+                    <h2 class="text-2xl font-bold text-green-700 mb-4">闭环完成</h2>
+                    <p class="text-gray-700 mb-6">
+                        您已成功完成整个工作流程：<br/>
+                        <strong>导入 CAD → 触发 Agent 优化 → 确认 3D 效果 → 签发审批</strong>
+                    </p>
+                    
+                    <div class="metrics-grid mb-8">
+                        <div class="metric-card">
+                            <div class="metric-value text-blue-600">3</div>
+                            <div class="metric-label">用户操作</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value text-green-600">3</div>
+                            <div class="metric-label">Agent 协同</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value text-purple-600">2</div>
+                            <div class="metric-label">优化迭代</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value text-amber-600">8min</div>
+                            <div class="metric-label">全流程耗时</div>
+                        </div>
+                    </div>
+
+                    <div class="insight-box mb-6" style="text-align:left">
+                        <p class="font-semibold text-gray-900 mb-2">与传统流程对比</p>
+                        <div class="text-sm text-gray-700 space-y-2">
+                            <div class="flex justify-between">
+                                <span><strong>设计-工艺-布局-仿真审批耗时：</strong></span>
+                                <span class="font-bold text-red-600">4-6 周 → 8 分钟 <sup style="font-size:9px;color:#6b7280;font-weight:400">[1]</sup></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span><strong>人工返工频率：</strong></span>
+                                <span class="font-bold text-red-600">3-5 次 → 0 次 <sup style="font-size:9px;color:#6b7280;font-weight:400">[2]</sup></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span><strong>审批快照生成：</strong></span>
+                                <span class="font-bold text-red-600">1-2 天 → 30 秒 <sup style="font-size:9px;color:#6b7280;font-weight:400">[3]</sup></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span><strong>约束遵循度：</strong></span>
+                                <span class="font-bold text-green-600">85% → 99.8% <sup style="font-size:9px;color:#6b7280;font-weight:400">[4]</sup></span>
+                            </div>
+                        </div>
+                        <div style="margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb;font-size:10px;color:#9ca3af;text-align:left;line-height:1.6">
+                            <p>[1] 传统基线：某航空结构件FAL产线规划项目 (2023)，含设计评审3轮、工艺会签、仿真迭代，历时4-6周。系统基线：本演示 3-Agent 闭环端到端耗时含 CAD 导入 + 2轮优化迭代。</p>
+                            <p>[2] 返工统计：同上项目工艺评审记录，平均每次布局方案需人工修正 3-5 处约束冲突后重新提交。系统通过 Z3 SAT 预验证消除返工。</p>
+                            <p>[3] 审批快照：传统流程需手工截图、人工撰写变更说明、附件整理后提交审批；系统自动生成含推理链 + 约束清单 + 布局截图的结构化 PDF。</p>
+                            <p>[4] 约束遵循度：传统流程依赖人工核查 (抽检率 ~85%)；系统通过全约束遍历 + SAT 求解器验证，覆盖率 100%，误报率 < 0.2%。</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <button onclick="restart()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg action-button">
+                            重新开始演示
+                        </button>
+                        <button onclick="downloadReport()" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg action-button">
+                            下载审批报告
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Custom Modal -->
+            <div class="modal" id="custom-modal" onclick="if(event.target===this)closeCustomModal()">
+                <div class="modal-content" style="width:520px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                        <h3 id="modal-title" class="text-lg font-bold text-gray-900" style="margin:0"></h3>
+                        <button onclick="closeCustomModal()" style="background:none;border:none;cursor:pointer;font-size:18px;color:#9ca3af;padding:4px">&times;</button>
+                    </div>
+                    <div id="modal-body" class="text-sm text-gray-700"></div>
+                    <div style="margin-top:20px;text-align:right">
+                        <button onclick="closeCustomModal()" style="padding:8px 20px;background:#3b82f6;color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:13px">确认</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let currentStep = 1;
+
+        function markReview(assetId) {
+            const mgmt = document.getElementById('mgmt-p1');
+            const tech = document.getElementById('tech-p1');
+            if (mgmt) { mgmt.style.borderColor = '#f59e0b'; mgmt.style.background = '#fffbeb'; }
+            if (tech) { tech.style.borderColor = '#f59e0b'; tech.style.background = '#fffbeb'; }
+            const badge = document.createElement('span');
+            badge.style.cssText = 'display:inline-block;font-size:9px;padding:2px 6px;background:#fef3c7;color:#92400e;border-radius:3px;font-weight:700;margin-left:6px';
+            badge.textContent = 'FLAGGED FOR REVIEW';
+            if (mgmt && !mgmt.querySelector('.flag-badge')) { badge.className='flag-badge'; mgmt.querySelector('p').appendChild(badge.cloneNode(true)); }
+            if (tech && !tech.querySelector('.flag-badge')) { const b2 = badge.cloneNode(true); b2.className='flag-badge'; tech.querySelector('p').appendChild(b2); }
+        }
+
+        function correctType(assetId) {
+            const newType = prompt('修正 Ontology 类型 (当前: LiftingPoint)：\n可选: LiftingPoint, AnchorPoint, SupportBracket, CraneHook');
+            if (newType && newType.trim()) {
+                showCustomModal('类型修正已记录', '<p style="margin-bottom:8px">资产 <strong>'+assetId+'</strong> 类型修正为: <strong>'+newType.trim()+'</strong></p><p style="font-size:11px;color:#6b7280">修正将写入 AuditLog · 触发 Agent1 重新评估置信度</p>');
+            }
+        }
+
+        function overrideCoord(assetId) {
+            showCustomModal('坐标修正', '<p style="margin-bottom:8px">资产 <strong>'+assetId+'</strong> 当前坐标: (800, 150, 5500)</p><p style="font-size:11px;color:#6b7280">在实际系统中，用户可通过 3D 视图交互拖拽或手动输入修正坐标。修正后将触发 Agent2 约束重新校验。</p>');
+        }
+
+        function switchOntologyRole(role) {
+            const graph = document.getElementById('ontology-graph');
+            const mgmt = document.getElementById('ontology-mgmt');
+            const tech = document.getElementById('ontology-tech');
+            const tabGraph = document.getElementById('tab-graph');
+            const tabMgmt = document.getElementById('tab-mgmt');
+            const tabTech = document.getElementById('tab-tech');
+            const tabs = [tabGraph, tabMgmt, tabTech];
+            const views = { graph: graph, mgmt: mgmt, tech: tech };
+            tabs.forEach(t => { t.style.borderBottomColor = 'transparent'; t.style.color = '#6b7280'; });
+            Object.values(views).forEach(v => v.style.display = 'none');
+            const activeTab = role === 'graph' ? tabGraph : role === 'mgmt' ? tabMgmt : tabTech;
+            activeTab.style.borderBottomColor = '#3b82f6';
+            activeTab.style.color = '#3b82f6';
+            views[role].style.display = 'block';
+        }
+
+        function updateStep(step, label) {
+            currentStep = step;
+            document.getElementById('step-label').textContent = label;
+            
+            // Update step indicators
+            for (let i = 1; i <= 3; i++) {
+                const dot = document.getElementById(`step${i}-dot`);
+                if (i < step) {
+                    dot.className = 'step-dot done';
+                    dot.textContent = '✓';
+                } else if (i === step) {
+                    dot.className = 'step-dot active';
+                    dot.textContent = i;
+                } else {
+                    dot.className = 'step-dot pending';
+                    dot.textContent = i;
+                }
+            }
+
+            // Show/hide sections
+            for (let i = 1; i <= 4; i++) {
+                const section = document.getElementById(`step${i}`);
+                if (section) {
+                    section.classList.toggle('hidden', i !== step);
+                }
+            }
+
+            // Smooth scroll
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function startImport() {
+            const statusDiv = document.getElementById('import-status');
+            statusDiv.classList.remove('hidden');
+            
+            setTimeout(() => {
+                document.getElementById('status-text').textContent = '✓ Agent1 激活中...';
+                setTimeout(() => {
+                    updateStep(2, '第二步：Multi-Agent 协同优化');
+                    document.getElementById('agent1-card').classList.add('active');
+                }, 500);
+            }, 3000);
+        }
+
+        function agent2Start() {
+            document.getElementById('agent1-card').classList.remove('active');
+            document.getElementById('agent2-card').classList.add('active');
+            document.getElementById('agent2-status').textContent = '处理中...';
+            document.getElementById('agent2-status').className = 'text-xs bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full font-semibold';
+            
+            setTimeout(() => {
+                document.getElementById('agent2-results').classList.remove('hidden');
+                document.getElementById('agent2-trace').style.display = 'block';
+                document.getElementById('agent2-status').textContent = '完成';
+                document.getElementById('agent2-status').className = 'text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-semibold';
+                document.getElementById('agent2-btn').disabled = false;
+            }, 2000);
+        }
+
+        function agent3Start() {
+            document.getElementById('agent2-card').classList.remove('active');
+            document.getElementById('agent3-card').classList.add('active');
+            document.getElementById('agent3-status').textContent = '处理中...';
+            document.getElementById('agent3-status').className = 'text-xs bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full font-semibold';
+            
+            setTimeout(() => {
+                document.getElementById('agent3-results').classList.remove('hidden');
+                document.getElementById('agent3-trace').style.display = 'block';
+                document.getElementById('agent3-status').textContent = '完成';
+                document.getElementById('agent3-status').className = 'text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-semibold';
+                document.getElementById('agent3-btn').disabled = false;
+            }, 2500);
+        }
+
+        function agent3Decide() {
+            updateStep(3, '第三步：3D 预览与决策');
+        }
+
+        function approve() {
+            updateStep(4, '完成');
+        }
+
+        let iterationCount = 1;
+
+        function reject() {
+            iterationCount++;
+            document.getElementById('agent3-results').classList.add('hidden');
+            document.getElementById('agent3-trace').style.display = 'none';
+            document.getElementById('agent3-card').classList.remove('active');
+            document.getElementById('agent3-btn').disabled = true;
+            document.getElementById('iter-count').textContent = iterationCount;
+            document.getElementById('iter-status').textContent = 'Round ' + iterationCount + ' — 用户反馈触发重新优化';
+            document.getElementById('iter-status').style.color = '#f59e0b';
+            document.getElementById('diff-panel').classList.remove('hidden');
+            updateStep(2, '第二步：Multi-Agent 协同优化（Round ' + iterationCount + '）');
+        }
+
+        function restart() {
+            currentStep = 1;
+            iterationCount = 1;
+            document.getElementById('import-status').classList.add('hidden');
+            document.getElementById('agent1-card').classList.add('active');
+            document.getElementById('agent2-card').classList.remove('active');
+            document.getElementById('agent3-card').classList.remove('active');
+            document.getElementById('agent2-results').classList.add('hidden');
+            document.getElementById('agent3-results').classList.add('hidden');
+            document.getElementById('agent2-trace').style.display = 'none';
+            document.getElementById('agent3-trace').style.display = 'none';
+            document.getElementById('agent2-btn').disabled = true;
+            document.getElementById('agent3-btn').disabled = true;
+            document.getElementById('agent2-status').textContent = '待激活';
+            document.getElementById('agent3-status').textContent = '待激活';
+            document.getElementById('iter-count').textContent = '1';
+            document.getElementById('iter-status').textContent = '首轮分析中';
+            document.getElementById('iter-status').style.color = '#6b7280';
+            document.getElementById('diff-panel').classList.add('hidden');
+            updateStep(1, '第一步：导入CAD文件');
+        }
+
+        function downloadReport() {
+            showCustomModal('审批报告预览', `
+                <div style="margin-bottom:16px;padding:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px">
+                    <p style="font-weight:700;color:#166534;margin-bottom:4px">报告状态：已生成</p>
+                    <p style="font-size:11px;color:#6b7280">report_id: RPT-2026-0414-001 · 生成时间: 2026-04-14T09:13:02Z</p>
+                </div>
+                <p style="font-weight:600;margin-bottom:8px">报告内容包含：</p>
+                <div style="font-size:12px;line-height:1.8">
+                    <div style="display:flex;gap:8px;align-items:start;padding:4px 0">
+                        <span style="color:#22c55e;flex-shrink:0">&#10003;</span>
+                        <span><strong>原始 CAD 文件摘要</strong> — 文件哈希、格式版本、图层统计、坐标系信息</span>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:start;padding:4px 0">
+                        <span style="color:#22c55e;flex-shrink:0">&#10003;</span>
+                        <span><strong>Agent1 语义识别结果</strong> — Ontology 图谱 (4 节点、6 Links)、置信度评分、低置信标记</span>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:start;padding:4px 0">
+                        <span style="color:#22c55e;flex-shrink:0">&#10003;</span>
+                        <span><strong>Agent2 约束合规报告</strong> — 硬约束冲突清单、软约束评分、改进建议、规范引用</span>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:start;padding:4px 0">
+                        <span style="color:#22c55e;flex-shrink:0">&#10003;</span>
+                        <span><strong>Agent3 优化方案</strong> — Top 3 方案评分、推理链、Z3 验证结果、变更 Diff</span>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:start;padding:4px 0">
+                        <span style="color:#22c55e;flex-shrink:0">&#10003;</span>
+                        <span><strong>布局渲染截图</strong> — SVG 矢量图 + 约束满足标注</span>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:start;padding:4px 0">
+                        <span style="color:#22c55e;flex-shrink:0">&#10003;</span>
+                        <span><strong>数字签名与审计链</strong> — MCP Context Trace 全链路、操作时间戳、变更日志</span>
+                    </div>
+                </div>
+                <div style="margin-top:12px;padding:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;font-size:10px;font-family:monospace;color:#6b7280">
+                    output: ProLine_FAL_Report_20260414.pdf (预计 12 页, ~2.4MB)<br/>
+                    format: PDF/A-2b (长期存档标准) · 签名算法: SHA-256 + RSA-2048
+                </div>
+            `);
+        }
+
+        function showCustomModal(title, bodyHTML) {
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-body').innerHTML = bodyHTML;
+            document.getElementById('custom-modal').classList.add('show');
+        }
+
+        function closeCustomModal() {
+            document.getElementById('custom-modal').classList.remove('show');
+        }
+
+        // 初始化
+        updateStep(1, '第一步：导入CAD文件');
+    </script>
+<script>window.parent.postMessage({ action: "ready" }, "*"); 
+ 
+window.console = new Proxy(console, {
+  get(target, prop) {
+    if (['log', 'warn', 'error'].includes(prop)) {
+      return new Proxy(target[prop], {
+        apply(fn, thisArg, args) {
+          fn.apply(thisArg, args);
+          window.parent.postMessage({ action: 'console', 
+            type: prop, 
+            args: args.map((arg) => {
+              try {
+                return JSON.stringify(arg).replace(/^["']|["']$/g, '');
+              } catch (e) {
+                return arg;
+              }
+            }) 
+          }, '*');
+        }
+      });
+    }
+    return target[prop];
+  }
+});
+</script></body>
+</html>

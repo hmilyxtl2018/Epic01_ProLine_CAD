@@ -1,0 +1,1243 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>产线+工艺 AI+CAD 系统 · 航空制造数字化规划平台</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --primary: #003087;
+    --secondary: #29A0E0;
+    --accent: #00B8C8;
+    --text-main: #1E2937;
+    --text-muted: #64748B;
+    --bg-dark: #001855;
+    --bg-canvas: #0A1628;
+    --sidebar-bg: #F0F5FA;
+    --border: #64748B;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; background: #F4F7FB; color: var(--text-main); overflow: hidden; height: 100vh; }
+
+  /* ===== TOP NAV ===== */
+  .topnav {
+    background: var(--primary);
+    height: 52px;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 8px;
+    border-bottom: 2px solid var(--accent);
+    flex-shrink: 0;
+    z-index: 100;
+    position: relative;
+  }
+  .logo { color: white; font-size: 15px; font-weight: 700; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; }
+  .logo-icon { width: 28px; height: 28px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .nav-divider { width: 1px; height: 24px; background: rgba(255,255,255,0.25); margin: 0 12px; }
+  .nav-tabs { display: flex; gap: 2px; }
+  .nav-tab {
+    color: rgba(255,255,255,0.7);
+    padding: 6px 14px;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 6px;
+    border-bottom: 2px solid transparent;
+  }
+  .nav-tab:hover { color: white; background: rgba(255,255,255,0.1); }
+  .nav-tab.active { color: white; background: rgba(0,184,200,0.2); border-bottom-color: var(--accent); }
+  .nav-tab .badge { background: #E53E3E; color: white; font-size: 10px; padding: 1px 5px; border-radius: 8px; }
+  .nav-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .nav-btn {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: opacity 0.2s;
+  }
+  .nav-btn:hover { opacity: 0.85; }
+  .nav-btn.outline { background: transparent; border: 1px solid rgba(255,255,255,0.5); color: white; }
+  .nav-btn.outline:hover { background: rgba(255,255,255,0.1); }
+  .version-badge { background: rgba(41,160,224,0.3); color: var(--accent); border: 1px solid var(--accent); padding: 3px 8px; border-radius: 4px; font-size: 11px; }
+
+  /* ===== LAYOUT ===== */
+  .app-body { display: flex; height: calc(100vh - 52px); overflow: hidden; }
+  .panel-left { width: 240px; background: white; border-right: 1px solid #E2E8F0; display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+  .panel-center { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .panel-right { width: 280px; background: white; border-left: 1px solid #E2E8F0; display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+
+  /* ===== PANEL HEADERS ===== */
+  .panel-header {
+    background: var(--primary);
+    color: white;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .panel-header .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+  /* ===== UPLOAD ZONE ===== */
+  .upload-zone {
+    border: 2px dashed var(--secondary);
+    border-radius: 8px;
+    padding: 16px 12px;
+    text-align: center;
+    margin: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #F0F8FF;
+  }
+  .upload-zone:hover { background: #E0F2FE; border-color: var(--accent); }
+  .upload-zone .icon { font-size: 22px; margin-bottom: 4px; }
+  .upload-zone .label { font-size: 11px; color: var(--text-muted); }
+  .upload-zone .formats { font-size: 10px; color: var(--secondary); margin-top: 3px; }
+
+  /* ===== LAYER TREE ===== */
+  .layer-tree { flex: 1; overflow-y: auto; padding: 8px; }
+  .tree-section { margin-bottom: 6px; }
+  .tree-section-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 4px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .tree-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.15s;
+    margin-bottom: 1px;
+  }
+  .tree-item:hover { background: #EFF6FF; }
+  .tree-item.selected { background: #DBEAFE; color: var(--primary); }
+  .tree-item.warning { background: #FFF3CD; }
+  .layer-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .dot-blue { background: #3B82F6; }
+  .dot-orange { background: #F97316; }
+  .dot-yellow { background: #EAB308; }
+  .dot-red { background: #EF4444; }
+  .dot-green { background: #22C55E; }
+  .dot-purple { background: #A855F7; }
+  .dot-gray { background: #94A3B8; }
+  .tag-unrecog { background: #FEF3C7; color: #D97706; font-size: 9px; padding: 1px 5px; border-radius: 3px; margin-left: auto; }
+  .tag-matched { background: #D1FAE5; color: #065F46; font-size: 9px; padding: 1px 5px; border-radius: 3px; margin-left: auto; }
+
+  /* ===== CANVAS ===== */
+  .canvas-toolbar {
+    background: var(--bg-dark);
+    padding: 6px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #1E3A6E;
+    flex-shrink: 0;
+  }
+  .canvas-tool {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.8);
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .canvas-tool:hover, .canvas-tool.active { background: var(--secondary); border-color: var(--secondary); color: white; }
+  .canvas-tool.danger { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.5); color: #FCA5A5; }
+  .canvas-area {
+    flex: 1;
+    background: var(--bg-canvas);
+    position: relative;
+    overflow: hidden;
+  }
+  /* Simulated 3D floor plan */
+  .floor-plan { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+  .fp-outer { width: 620px; height: 380px; border: 2px solid #2A4A7F; background: rgba(0,48,135,0.15); border-radius: 4px; position: relative; }
+  /* Crane beams */
+  .crane-beam {
+    position: absolute;
+    background: repeating-linear-gradient(90deg, transparent, transparent 8px, rgba(249,115,22,0.6) 8px, rgba(249,115,22,0.6) 10px);
+    height: 4px;
+    top: 40px;
+    left: 0; right: 0;
+    border-radius: 2px;
+  }
+  .crane-beam2 { top: 180px; }
+  .crane-beam3 { top: 320px; }
+  /* Ground pits */
+  .ground-pit {
+    position: absolute;
+    background: rgba(59,130,246,0.4);
+    border: 2px dashed rgba(59,130,246,0.9);
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; color: #93C5FD; font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .ground-pit:hover { background: rgba(59,130,246,0.65); transform: scale(1.02); }
+  /* Restricted zones */
+  .restricted-zone {
+    position: absolute;
+    background: rgba(239,68,68,0.15);
+    border: 2px dashed rgba(239,68,68,0.7);
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; color: #FCA5A5; font-weight: 600;
+    cursor: pointer;
+  }
+  /* Station boxes */
+  .station {
+    position: absolute;
+    border: 2px solid rgba(34,197,94,0.7);
+    background: rgba(34,197,94,0.08);
+    border-radius: 4px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: 10px; color: #86EFAC; font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .station:hover { background: rgba(34,197,94,0.18); border-color: #22C55E; }
+  .station.selected { background: rgba(34,197,94,0.25); border-color: #4ADE80; box-shadow: 0 0 0 2px rgba(34,197,94,0.3); }
+  .station .st-sub { font-size: 8px; color: #4ADE80; font-weight: 400; margin-top: 2px; }
+  /* Fixture/Asset */
+  .fixture {
+    position: absolute;
+    border: 2px solid rgba(234,179,8,0.9);
+    background: rgba(234,179,8,0.15);
+    border-radius: 3px;
+    font-size: 9px; color: #FDE68A; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    text-align: center;
+    cursor: grab;
+    transition: all 0.2s;
+  }
+  .fixture:hover { background: rgba(234,179,8,0.3); box-shadow: 0 0 8px rgba(234,179,8,0.4); }
+  /* Legend */
+  .canvas-legend {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    background: rgba(0,24,85,0.9);
+    border: 1px solid #2A4A7F;
+    border-radius: 6px;
+    padding: 8px 12px;
+    display: flex; gap: 14px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: rgba(255,255,255,0.75); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+  /* Coordinate info */
+  .canvas-coord {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    background: rgba(0,24,85,0.9);
+    border: 1px solid #2A4A7F;
+    border-radius: 5px;
+    padding: 5px 10px;
+    font-size: 10px;
+    color: var(--accent);
+    font-family: monospace;
+  }
+  /* Tooltip popup */
+  .canvas-tooltip {
+    position: absolute;
+    background: rgba(0,24,85,0.97);
+    border: 1px solid var(--secondary);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 11px;
+    color: white;
+    width: 180px;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .canvas-tooltip .tt-title { color: var(--accent); font-weight: 700; margin-bottom: 5px; font-size: 12px; }
+  .canvas-tooltip .tt-row { display: flex; justify-content: space-between; margin-bottom: 3px; color: rgba(255,255,255,0.8); }
+  .canvas-tooltip .tt-val { color: #FDE68A; }
+  .canvas-tooltip .tt-constraint { background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.5); border-radius: 4px; padding: 4px 6px; margin-top: 6px; font-size: 10px; color: #FCA5A5; }
+
+  /* ===== BOTTOM STATUS ===== */
+  .status-bar {
+    background: var(--bg-dark);
+    padding: 5px 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-top: 1px solid #1E3A6E;
+    flex-shrink: 0;
+  }
+  .status-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: rgba(255,255,255,0.7); }
+  .status-ok { color: #4ADE80; }
+  .status-warn { color: #FBBF24; }
+  .status-error { color: #F87171; }
+  .progress-bar { width: 100px; height: 5px; background: rgba(255,255,255,0.15); border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.3s; }
+
+  /* ===== RIGHT PANEL ===== */
+  .right-section { border-bottom: 1px solid #E2E8F0; }
+  .right-section-title {
+    padding: 7px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--primary);
+    background: #F0F5FA;
+    border-bottom: 1px solid #E2E8F0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .attr-row { padding: 5px 12px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; border-bottom: 1px solid #F1F5F9; }
+  .attr-key { color: var(--text-muted); }
+  .attr-val { color: var(--text-main); font-weight: 500; font-size: 11px; text-align: right; max-width: 130px; word-break: break-all; }
+  .attr-val.green { color: #059669; }
+  .attr-val.orange { color: #D97706; }
+  .attr-val.red { color: #DC2626; }
+  .constraint-card {
+    margin: 6px 10px;
+    border-radius: 6px;
+    padding: 8px 10px;
+    border-left: 3px solid;
+    background: #F8FAFC;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 11px;
+  }
+  .constraint-card:hover { background: #EFF6FF; }
+  .constraint-card.hard { border-color: #EF4444; }
+  .constraint-card.soft { border-color: #F59E0B; }
+  .constraint-card .cc-type { font-size: 9px; font-weight: 700; text-transform: uppercase; margin-bottom: 3px; }
+  .constraint-card.hard .cc-type { color: #DC2626; }
+  .constraint-card.soft .cc-type { color: #D97706; }
+  .constraint-card .cc-rule { color: var(--text-main); line-height: 1.4; }
+  .constraint-card .cc-meta { color: var(--text-muted); font-size: 10px; margin-top: 4px; }
+  .confidence-bar { height: 4px; background: #E2E8F0; border-radius: 2px; overflow: hidden; margin-top: 4px; }
+  .confidence-fill { height: 100%; border-radius: 2px; }
+  .cf-high { background: #22C55E; }
+  .cf-med { background: #F59E0B; }
+  .cf-low { background: #EF4444; }
+  .review-item {
+    margin: 6px 10px;
+    padding: 8px;
+    background: #FFF7ED;
+    border: 1px solid #FED7AA;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .review-item:hover { background: #FEF3C7; }
+  .review-item .ri-id { font-size: 10px; color: #D97706; font-weight: 700; }
+  .review-item .ri-text { color: var(--text-main); margin: 3px 0; line-height: 1.4; }
+  .review-item .ri-conf { font-size: 10px; color: var(--text-muted); }
+  .review-actions { display: flex; gap: 5px; margin-top: 6px; }
+  .btn-approve { background: #D1FAE5; color: #065F46; border: none; padding: 3px 8px; border-radius: 4px; font-size: 10px; cursor: pointer; }
+  .btn-reject { background: #FEE2E2; color: #991B1B; border: none; padding: 3px 8px; border-radius: 4px; font-size: 10px; cursor: pointer; }
+
+  /* ===== MODULE TAB (PRD-2) ===== */
+  #module2 { display: none; }
+  #module1 { display: flex; }
+
+  /* ===== KG Visualization ===== */
+  .kg-area {
+    flex: 1;
+    background: var(--bg-canvas);
+    position: relative;
+    overflow: hidden;
+    cursor: grab;
+  }
+  .kg-node {
+    position: absolute;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 700;
+    color: white;
+    cursor: pointer;
+    text-align: center;
+    transition: transform 0.2s;
+    border: 2px solid;
+  }
+  .kg-node:hover { transform: scale(1.15); }
+  .kg-node.jig { background: rgba(234,179,8,0.3); border-color: #EAB308; color: #FDE68A; }
+  .kg-node.station { background: rgba(34,197,94,0.3); border-color: #22C55E; color: #86EFAC; }
+  .kg-node.tool { background: rgba(41,160,224,0.3); border-color: #29A0E0; color: #BAE6FD; }
+  .kg-edge {
+    position: absolute;
+    background: rgba(100,116,139,0.5);
+    height: 2px;
+    transform-origin: left center;
+  }
+  .kg-edge.hard { background: rgba(239,68,68,0.7); }
+  .kg-edge.soft { background: rgba(245,158,11,0.7); }
+  .kg-label {
+    position: absolute;
+    font-size: 8px;
+    color: rgba(255,255,255,0.5);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  svg.kg-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+
+  /* ===== SOP Editor ===== */
+  .sop-editor {
+    flex: 1;
+    overflow-y: auto;
+    font-size: 11px;
+    font-family: 'Consolas', monospace;
+    background: #0D1B2A;
+    color: #E2E8F0;
+    padding: 12px;
+  }
+  .sop-line { padding: 2px 0; display: flex; gap: 10px; line-height: 1.6; }
+  .sop-line:hover { background: rgba(255,255,255,0.05); }
+  .sop-lnum { color: #4A5568; width: 28px; flex-shrink: 0; text-align: right; }
+  .sop-conflict { background: rgba(239,68,68,0.15); border-left: 3px solid #EF4444; padding-left: 8px; }
+  .sop-review { background: rgba(245,158,11,0.15); border-left: 3px solid #F59E0B; padding-left: 8px; }
+  .sop-ok { border-left: 3px solid #22C55E; padding-left: 8px; }
+  .sop-key { color: #7DD3FC; }
+  .sop-str { color: #86EFAC; }
+  .sop-num { color: #FDE68A; }
+
+  /* ===== Upload multi tabs ===== */
+  .upload-tabs { display: flex; border-bottom: 1px solid #E2E8F0; background: #F8FAFC; }
+  .upload-tab { flex: 1; padding: 8px 4px; text-align: center; font-size: 11px; font-weight: 600; cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent; transition: all 0.2s; }
+  .upload-tab.active { color: var(--primary); border-bottom-color: var(--primary); background: white; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #CBD5E0; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+  /* ===== Checkpoint Banner ===== */
+  .checkpoint-banner {
+    background: linear-gradient(90deg, #003087, #004AC2);
+    border-bottom: 2px solid var(--accent);
+    padding: 5px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    color: rgba(255,255,255,0.9);
+    flex-shrink: 0;
+  }
+  .cp-step { background: var(--accent); color: white; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 10px; }
+  .cp-check { display: flex; align-items: center; gap: 4px; }
+  .cp-check .ck { width: 12px; height: 12px; border-radius: 2px; border: 1px solid rgba(255,255,255,0.5); background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 8px; }
+  .cp-check .ck.done { background: #22C55E; border-color: #22C55E; }
+  .cp-sep { color: rgba(255,255,255,0.3); }
+  .cp-lock { margin-left: auto; background: rgba(234,179,8,0.2); border: 1px solid #EAB308; color: #FDE68A; padding: 3px 10px; border-radius: 4px; font-size: 10px; font-weight: 700; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<!-- TOP NAVIGATION -->
+<div class="topnav">
+  <div class="logo">
+    <div class="logo-icon">✈</div>
+    <span>产线+工艺 AI+CAD 系统</span>
+  </div>
+  <span class="version-badge">v2.0</span>
+  <div class="nav-divider"></div>
+  <div class="nav-tabs">
+    <div class="nav-tab active" onclick="switchModule(1, this)">
+      <span>🗺️</span> PRD-1 语义化底图解析
+    </div>
+    <div class="nav-tab" onclick="switchModule(2, this)">
+      <span>🔬</span> PRD-2 工艺约束提取
+      <span class="badge">3</span>
+    </div>
+    <div class="nav-tab" onclick="switchModule(3, this)">
+      <span>⚙️</span> PRD-3 布局优化
+    </div>
+    <div class="nav-tab" onclick="switchModule(4, this)">
+      <span>📊</span> PRD-4 脉动仿真
+    </div>
+    <div class="nav-tab" onclick="switchModule(5, this)">
+      <span>📋</span> PRD-5 决策报告
+    </div>
+  </div>
+  <div class="nav-right">
+    <button class="nav-btn outline">📡 MCP: ctx-uuid-001</button>
+    <button class="nav-btn" onclick="alert('正在导出 SiteModel 为 OpenUSD 格式...')">⬆ 导出 OpenUSD</button>
+    <button class="nav-btn" onclick="alert('正在解析底图，预计 8 分钟完成...')">🚀 解析底图</button>
+    <div style="width:28px;height:28px;border-radius:50%;background:var(--secondary);display:flex;align-items:center;justify-content:center;color:white;font-size:12px;font-weight:700;cursor:pointer;">张</div>
+  </div>
+</div>
+
+<!-- CHECKPOINT BANNER -->
+<div class="checkpoint-banner" id="checkpoint-bar">
+  <span class="cp-step">检查点 A</span>
+  <span style="color:rgba(255,255,255,0.6)">底图解析 → 布局优化 交接检查：</span>
+  <div class="cp-check"><div class="ck done">✓</div><span>SiteModel 版本锁定</span></div>
+  <span class="cp-sep">|</span>
+  <div class="cp-check"><div class="ck done">✓</div><span>master_device_id 匹配</span></div>
+  <span class="cp-sep">|</span>
+  <div class="cp-check"><div class="ck done">✓</div><span>坐标系对齐</span></div>
+  <span class="cp-sep">|</span>
+  <div class="cp-check"><div class="ck">!</div><span style="color:#FBBF24">地坑待甲方确认</span></div>
+  <span class="cp-sep">|</span>
+  <div class="cp-check"><div class="ck">!</div><span style="color:#FBBF24">禁区待书面确认</span></div>
+  <div class="cp-lock">🔒 锁版确认</div>
+</div>
+
+<!-- MODULE 1: 语义化底图解析 -->
+<div id="module1" class="app-body">
+  <!-- LEFT PANEL -->
+  <div class="panel-left">
+    <div class="panel-header"><div class="dot"></div>文件上传 & 图层树</div>
+    
+    <div class="upload-zone" onclick="handleUpload()">
+      <div class="icon">📂</div>
+      <div style="font-size:12px;font-weight:600;color:var(--primary)">拖拽或点击上传</div>
+      <div class="formats">DWG · IFC · RVT · .LAS · .E57 · JT</div>
+    </div>
+
+    <div style="padding:6px 10px;display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:11px;font-weight:600;color:var(--primary)">图层树</span>
+      <span style="font-size:10px;color:var(--text-muted)">500+ 图层</span>
+    </div>
+
+    <div class="layer-tree">
+      <div class="tree-section">
+        <div class="tree-section-title">
+          <span>装配站位</span>
+          <span style="background:#D1FAE5;color:#065F46;padding:1px 5px;border-radius:3px;font-size:9px;">已识别 12</span>
+        </div>
+        <div class="tree-item selected" onclick="selectLayer('station', this)">
+          <div class="layer-dot dot-green"></div>STATION-01~12
+          <span class="tag-matched">✓ 自动</span>
+        </div>
+        <div class="tree-item" onclick="selectLayer('assy', this)">
+          <div class="layer-dot dot-green"></div>ASSY_STN_FUSELAGE
+          <span class="tag-matched">✓</span>
+        </div>
+      </div>
+
+      <div class="tree-section">
+        <div class="tree-section-title">
+          <span>地沟/地坑</span>
+          <span style="background:#DBEAFE;color:#1E40AF;padding:1px 5px;border-radius:3px;font-size:9px;">3个</span>
+        </div>
+        <div class="tree-item" onclick="selectLayer('pit1', this)">
+          <div class="layer-dot dot-blue"></div>PIT_001 (主装配坑)
+          <span class="tag-matched">✓</span>
+        </div>
+        <div class="tree-item" onclick="selectLayer('pit2', this)">
+          <div class="layer-dot dot-blue"></div>GROUND_SLOT_A
+          <span class="tag-matched">✓</span>
+        </div>
+        <div class="tree-item warning" onclick="selectLayer('pit3', this)">
+          <div class="layer-dot dot-blue"></div>PIT_003
+          <span class="tag-unrecog">待确认</span>
+        </div>
+      </div>
+
+      <div class="tree-section">
+        <div class="tree-section-title"><span>吊车梁</span></div>
+        <div class="tree-item" onclick="selectLayer('crane', this)">
+          <div class="layer-dot dot-orange"></div>CRANE_RUNWAY_A
+          <span class="tag-matched">✓</span>
+        </div>
+        <div class="tree-item" onclick="selectLayer('crane2', this)">
+          <div class="layer-dot dot-orange"></div>BRIDGE_CRANE_50T
+          <span class="tag-matched">✓</span>
+        </div>
+      </div>
+
+      <div class="tree-section">
+        <div class="tree-section-title"><span>型架基础</span></div>
+        <div class="tree-item" onclick="selectLayer('found', this)">
+          <div class="layer-dot dot-yellow"></div>JIGS_FOUNDATION_01
+          <span class="tag-matched">✓</span>
+        </div>
+        <div class="tree-item" onclick="selectLayer('found2', this)">
+          <div class="layer-dot dot-yellow"></div>FIXTURE_BASE_A
+          <span class="tag-matched">✓</span>
+        </div>
+      </div>
+
+      <div class="tree-section">
+        <div class="tree-section-title"><span>禁区/防爆</span></div>
+        <div class="tree-item" onclick="selectLayer('expz', this)">
+          <div class="layer-dot dot-red"></div>EXPLOSION_PROOF_Z1
+          <span class="tag-matched">✓</span>
+        </div>
+        <div class="tree-item" onclick="selectLayer('hazard', this)">
+          <div class="layer-dot dot-red"></div>HAZARD_ZONE_FUEL
+          <span class="tag-matched">✓</span>
+        </div>
+      </div>
+
+      <div class="tree-section">
+        <div class="tree-section-title">
+          <span>未识别图层</span>
+          <span style="background:#FEE2E2;color:#991B1B;padding:1px 5px;border-radius:3px;font-size:9px;">⚠ 7个</span>
+        </div>
+        <div class="tree-item warning" onclick="markLayer(this)">
+          <div class="layer-dot dot-gray"></div>LAYER_0047
+          <span class="tag-unrecog">手动标注</span>
+        </div>
+        <div class="tree-item warning" onclick="markLayer(this)">
+          <div class="layer-dot dot-gray"></div>LAYER_0203
+          <span class="tag-unrecog">手动标注</span>
+        </div>
+        <div class="tree-item warning" onclick="markLayer(this)">
+          <div class="layer-dot dot-gray"></div>SPECIAL_EQUIP_A
+          <span class="tag-unrecog">手动标注</span>
+        </div>
+      </div>
+
+      <div style="padding:8px 6px;border-top:1px solid #E2E8F0;margin-top:6px;">
+        <div style="font-size:11px;font-weight:600;color:var(--primary);margin-bottom:6px;">设备清单导入</div>
+        <button onclick="alert('请上传 Excel/CSV 格式的设备清单，系统将自动匹配 master_device_id')" style="width:100%;background:#EFF6FF;border:1px dashed #93C5FD;color:var(--secondary);padding:7px;border-radius:5px;font-size:11px;cursor:pointer;">
+          📋 导入设备清单 (.xlsx)
+        </button>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:4px;text-align:center;">已匹配 847/892 套工装（95.0%）</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER: 3D CANVAS -->
+  <div class="panel-center">
+    <div class="canvas-toolbar">
+      <div class="canvas-tool active">🖱 选择</div>
+      <div class="canvas-tool">✋ 平移</div>
+      <div class="canvas-tool">🔍 缩放</div>
+      <div class="canvas-tool">📐 测量</div>
+      <div class="canvas-tool">🏷 标注</div>
+      <div style="width:1px;height:20px;background:rgba(255,255,255,0.2);margin:0 4px;"></div>
+      <div class="canvas-tool">图层过滤</div>
+      <div class="canvas-tool">3D/2D</div>
+      <div class="canvas-tool">AR 预览</div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:6px;">
+        <select id="versionSelect" onchange="handleVersionChange()" style="background:#1E3A6E;border:1px solid #2A4A7F;color:rgba(255,255,255,0.9);padding:3px 8px;border-radius:4px;font-size:11px;">
+          <option>SiteModel v1.2.3 (当前)</option>
+          <option>SiteModel v1.2.2</option>
+          <option>SiteModel v1.1.0</option>
+        </select>
+        <div class="canvas-tool danger" onclick="showDiff()">⚡ Diff 对比</div>
+      </div>
+    </div>
+
+    <div class="canvas-area" onclick="handleCanvasClick(event)">
+      <!-- Coordinate display -->
+      <div class="canvas-coord">GCP-001 | X: 14520.3mm | Y: 8340.1mm | 精度: ✓ ≤1mm</div>
+
+      <!-- Floor plan visualization -->
+      <div class="floor-plan">
+        <div class="fp-outer">
+          <!-- Crane beams (orange dashed lines) -->
+          <div class="crane-beam"></div>
+          <div class="crane-beam crane-beam2"></div>
+          <div class="crane-beam crane-beam3"></div>
+          <!-- Labels for cranes -->
+          <div style="position:absolute;top:26px;left:10px;font-size:8px;color:rgba(249,115,22,0.9);font-weight:600;">CRANE-A (50T, H=12000mm)</div>
+          <div style="position:absolute;top:166px;left:10px;font-size:8px;color:rgba(249,115,22,0.9);font-weight:600;">CRANE-B (30T)</div>
+
+          <!-- Ground pits (blue dashed) -->
+          <div class="ground-pit" style="left:30px;top:65px;width:80px;height:45px;" onclick="showPitInfo(event)">PIT-001<br>深1500mm</div>
+          <div class="ground-pit" style="left:200px;top:210px;width:100px;height:35px;" onclick="showPitInfo(event)">SLOT-A</div>
+          <div class="ground-pit" style="left:440px;top:85px;width:60px;height:50px;" onclick="showPitInfo(event)">PIT-003<br>⚠待确认</div>
+
+          <!-- Restricted zones (red semi-transparent) -->
+          <div class="restricted-zone" style="right:10px;top:200px;width:90px;height:80px;">🚫 防爆区<br>HAZARD-Z1</div>
+          <div class="restricted-zone" style="left:10px;bottom:10px;width:70px;height:50px;">🚫 禁区</div>
+
+          <!-- Assembly stations -->
+          <div class="station" style="left:120px;top:60px;width:80px;height:70px;" onclick="selectStation('STN-01', this)">
+            STN-01<div class="st-sub">蒙皮装配</div>
+          </div>
+          <div class="station selected" style="left:220px;top:60px;width:80px;height:70px;" onclick="selectStation('STN-02', this)">
+            STN-02<div class="st-sub">对接总装</div>
+          </div>
+          <div class="station" style="left:320px;top:60px;width:80px;height:70px;" onclick="selectStation('STN-03', this)">
+            STN-03<div class="st-sub">发动机装</div>
+          </div>
+          <div class="station" style="left:420px;top:60px;width:80px;height:70px;" onclick="selectStation('STN-04', this)">
+            STN-04<div class="st-sub">系统集成</div>
+          </div>
+          <div class="station" style="left:120px;top:160px;width:80px;height:70px;" onclick="selectStation('STN-05', this)">
+            STN-05<div class="st-sub">机翼装配</div>
+          </div>
+          <div class="station" style="left:220px;top:160px;width:80px;height:70px;" onclick="selectStation('STN-06', this)">
+            STN-06<div class="st-sub">起落架</div>
+          </div>
+          <div class="station" style="left:320px;top:160px;width:80px;height:70px;" onclick="selectStation('STN-07', this)">
+            STN-07<div class="st-sub">检测验收</div>
+          </div>
+
+          <!-- Fixtures/Assets (yellow) -->
+          <div class="fixture" style="left:130px;top:75px;width:60px;height:45px;" ondragstart="dragStart(event)" draggable="true">F-2024-007<br>蒙皮型架</div>
+          <div class="fixture" style="left:230px;top:75px;width:60px;height:45px;" draggable="true">F-2024-008<br>对接型架</div>
+          <div class="fixture" style="left:330px;top:75px;width:60px;height:45px;" draggable="true">JIG-ENG<br>发动机架</div>
+          <div class="fixture" style="left:130px;top:250px;width:75px;height:40px;" draggable="true">AGV-01<br>自动导引</div>
+
+          <!-- Columns -->
+          <div style="position:absolute;left:0;top:0;width:12px;height:12px;background:rgba(100,116,139,0.8);"></div>
+          <div style="position:absolute;right:0;top:0;width:12px;height:12px;background:rgba(100,116,139,0.8);"></div>
+          <div style="position:absolute;left:0;bottom:0;width:12px;height:12px;background:rgba(100,116,139,0.8);"></div>
+          <div style="position:absolute;right:0;bottom:0;width:12px;height:12px;background:rgba(100,116,139,0.8);"></div>
+          <div style="position:absolute;left:300px;top:0;width:12px;height:12px;background:rgba(100,116,139,0.8);"></div>
+          <div style="position:absolute;left:300px;bottom:0;width:12px;height:12px;background:rgba(100,116,139,0.8);"></div>
+
+          <!-- Maintenance aisle -->
+          <div style="position:absolute;left:0;top:138px;right:0;height:14px;background:repeating-linear-gradient(90deg,rgba(255,255,255,0.05),rgba(255,255,255,0.05) 10px,rgba(168,85,247,0.1) 10px,rgba(168,85,247,0.1) 20px);border-top:1px dashed rgba(168,85,247,0.5);border-bottom:1px dashed rgba(168,85,247,0.5);">
+            <span style="font-size:8px;color:rgba(168,85,247,0.9);padding-left:8px;line-height:14px;">检修通道 ≥1200mm</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tooltip (shown on selection) -->
+      <div class="canvas-tooltip" id="canvas-tooltip" style="left:340px;top:100px;display:none;">
+        <div class="tt-title">🟨 STN-02 · 对接总装站位</div>
+        <div class="tt-row"><span>语义标签</span><span class="tt-val">station_boundary</span></div>
+        <div class="tt-row"><span>工装</span><span class="tt-val">F-2024-008</span></div>
+        <div class="tt-row"><span>尺寸</span><span class="tt-val">12×8m</span></div>
+        <div class="tt-row"><span>节拍</span><span class="tt-val">120 min</span></div>
+        <div class="tt-constraint">⚠ 约束: F-2024-007占位时禁止相邻站起吊</div>
+      </div>
+
+      <!-- Pit constraint popup -->
+      <div id="pit-popup" style="display:none;position:absolute;left:140px;top:120px;background:rgba(0,24,85,0.97);border:1px solid #3B82F6;border-radius:8px;padding:12px;width:200px;z-index:20;font-size:11px;color:white;">
+        <div style="font-size:12px;font-weight:700;color:#93C5FD;margin-bottom:8px;">🔷 PIT-001 约束配置</div>
+        <div style="margin-bottom:6px;"><span style="color:#94A3B8;">类型: </span>GROUND_PIT</div>
+        <div style="margin-bottom:6px;"><span style="color:#94A3B8;">深度: </span><span style="color:#FDE68A;">1500 mm</span></div>
+        <div style="margin-bottom:6px;"><span style="color:#94A3B8;">承载: </span><span style="color:#FDE68A;">5000 kg</span></div>
+        <div style="background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.5);padding:5px;border-radius:4px;margin-bottom:8px;font-size:10px;color:#FCA5A5;">🚫 TRAVERSE_PROHIBITED<br>禁止穿越约束已激活</div>
+        <button onclick="document.getElementById('pit-popup').style.display='none'" style="background:#29A0E0;border:none;color:white;padding:5px 12px;border-radius:4px;font-size:11px;cursor:pointer;width:100%;">确认配置</button>
+      </div>
+
+      <!-- Legend -->
+      <div class="canvas-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#3B82F6;"></div>地沟/地坑</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#F97316;border-radius:0;height:4px;width:14px;"></div>吊车梁</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#EAB308;"></div>型架/工装</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#22C55E;border-radius:2px;width:12px;height:10px;border:1px solid #4ADE80;"></div>装配站位</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(239,68,68,0.3);border:1px dashed #EF4444;"></div>禁区</div>
+      </div>
+    </div>
+
+    <!-- STATUS BAR -->
+    <div class="status-bar">
+      <div class="status-item">
+        <span>解析进度</span>
+        <div class="progress-bar"><div class="progress-fill" style="width:87%;"></div></div>
+        <span style="color:var(--accent)">87%</span>
+      </div>
+      <div class="status-item"><span class="status-ok">✓</span><span>坐标精度 ≤1mm</span></div>
+      <div class="status-item"><span class="status-ok">✓</span><span>障碍物识别 93.5%</span></div>
+      <div class="status-item"><span class="status-warn">⚠</span><span style="color:#FBBF24">未识别图层: 7</span></div>
+      <div class="status-item"><span class="status-ok">✓</span><span>master_device_id 95.0%</span></div>
+      <div class="status-item"><span class="status-warn">⚠</span><span style="color:#FBBF24">PIT-003 待甲方确认</span></div>
+      <div style="margin-left:auto;" class="status-item"><span style="color:rgba(255,255,255,0.4);">SiteModel v1.2.3 | 处理时间: 7m32s | 三.js 渲染</span></div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL: Properties + Version -->
+  <div class="panel-right">
+    <div class="panel-header"><div class="dot"></div>属性面板</div>
+    
+    <div class="right-section">
+      <div class="right-section-title">
+        <span>🟩 STN-02 · 对接总装站位</span>
+        <span style="color:#22C55E;font-size:10px;">已识别</span>
+      </div>
+      <div class="attr-row"><span class="attr-key">语义标签</span><span class="attr-val">station_boundary</span></div>
+      <div class="attr-row"><span class="attr-key">长 × 宽</span><span class="attr-val">12,000 × 8,000 mm</span></div>
+      <div class="attr-row"><span class="attr-key">关联工装</span><span class="attr-val">F-2024-008</span></div>
+      <div class="attr-row"><span class="attr-key">master_device_id</span><span class="attr-val green">MDI-2024-008 ✓</span></div>
+      <div class="attr-row"><span class="attr-key">ERP ID</span><span class="attr-val">2000008</span></div>
+      <div class="attr-row"><span class="attr-key">重量</span><span class="attr-val">15,000 kg</span></div>
+      <div class="attr-row"><span class="attr-key">移动方式</span><span class="attr-val">CRANE_ONLY</span></div>
+      <div class="attr-row"><span class="attr-key">吊钩净高要求</span><span class="attr-val orange">≥ 5,500 mm</span></div>
+      <div class="attr-row"><span class="attr-key">地基基础</span><span class="attr-val">FOUND-002 (4点锚定)</span></div>
+      <div class="attr-row"><span class="attr-key">坐标精度</span><span class="attr-val green">✓ 0.08mm</span></div>
+      <div class="attr-row"><span class="attr-key">MCP Context</span><span class="attr-val" style="color:var(--secondary)">ctx-uuid-001</span></div>
+    </div>
+
+    <div class="right-section" style="flex-shrink:0;">
+      <div class="right-section-title"><span>约束列表</span><span style="color:var(--secondary);cursor:pointer;font-size:10px;">+ 添加</span></div>
+      <div class="constraint-card hard" onclick="showConstraintDetail('C001')">
+        <div class="cc-type">HARD · 空间排他</div>
+        <div class="cc-rule">STN-02占位时，禁止相邻STN-01/03进行起吊作业</div>
+        <div class="cc-meta">来源: 蒙皮装配工艺规程 p.23 | C005</div>
+        <div class="confidence-bar"><div class="confidence-fill cf-high" style="width:94%;"></div></div>
+      </div>
+      <div class="constraint-card hard" onclick="showConstraintDetail('C008')">
+        <div class="cc-type">HARD · 最小间距</div>
+        <div class="cc-rule">F-2024-008 与 F-2024-007 间距 ≥ 200mm</div>
+        <div class="cc-meta">来源: PMI标注 #PMI-00234 | C008</div>
+        <div class="confidence-bar"><div class="confidence-fill cf-high" style="width:98%;"></div></div>
+      </div>
+      <div class="constraint-card soft" onclick="showConstraintDetail('S003')">
+        <div class="cc-type">SOFT · 环境约束</div>
+        <div class="cc-rule">复合材料区域温度 18-28°C，湿度 &lt;65%</div>
+        <div class="cc-meta">来源: GJB环境规范 | AVC-003</div>
+        <div class="confidence-bar"><div class="confidence-fill cf-high" style="width:91%;"></div></div>
+      </div>
+    </div>
+
+    <div style="flex:1;overflow-y:auto;">
+      <div class="right-section-title">
+        <span>版本对比</span>
+        <span style="color:var(--text-muted);font-size:10px;">v1.2.2 → v1.2.3</span>
+      </div>
+      <div style="padding:8px 10px;">
+        <div style="font-size:11px;font-weight:600;color:var(--primary);margin-bottom:6px;">🔄 变更摘要</div>
+        <div style="display:flex;flex-direction:column;gap:5px;">
+          <div style="background:#D1FAE5;border-left:3px solid #22C55E;padding:5px 8px;border-radius:0 4px 4px 0;font-size:11px;">
+            <span style="font-size:10px;color:#065F46;font-weight:700;">新增</span>
+            <div>PIT-003 地坑（3号站位）</div>
+          </div>
+          <div style="background:#FEF3C7;border-left:3px solid #F59E0B;padding:5px 8px;border-radius:0 4px 4px 0;font-size:11px;">
+            <span style="font-size:10px;color:#D97706;font-weight:700;">修改</span>
+            <div>CRANE-B 轨迹坐标更新</div>
+          </div>
+          <div style="background:#FEE2E2;border-left:3px solid #EF4444;padding:5px 8px;border-radius:0 4px 4px 0;font-size:11px;">
+            <span style="font-size:10px;color:#991B1B;font-weight:700;">⚠ 影响</span>
+            <div>下游布局方案需重新验证</div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:0 10px 10px;">
+        <button onclick="alert('展示完整 Diff 视图：新增3号地坑区域、吊车梁B轨迹偏移量...')" style="width:100%;background:#EFF6FF;border:1px solid #93C5FD;color:var(--primary);padding:7px;border-radius:5px;font-size:11px;cursor:pointer;font-weight:600;">
+          📊 查看完整 Diff 视图
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODULE 2: 工艺文档转数字约束 -->
+<div id="module2" class="app-body" style="display:none;">
+  <!-- LEFT PANEL: Upload + Progress -->
+  <div class="panel-left">
+    <div class="panel-header"><div class="dot"></div>工艺文档上传</div>
+    
+    <div class="upload-tabs">
+      <div class="upload-tab active" onclick="switchUploadTab('mbd', this)">MBD</div>
+      <div class="upload-tab" onclick="switchUploadTab('sop', this)">SOP</div>
+      <div class="upload-tab" onclick="switchUploadTab('mbom', this)">MBOM</div>
+    </div>
+
+    <div id="upload-mbd">
+      <div class="upload-zone" style="margin-top:10px;" onclick="alert('上传 CATIA/NX MBD 三维工艺模型\n支持: .CATProduct, .CATPart, .prt')">
+        <div class="icon">🔩</div>
+        <div style="font-size:12px;font-weight:600;color:var(--primary)">MBD 三维模型</div>
+        <div class="formats">.CATProduct · .CATPart · .prt · JT</div>
+      </div>
+      <div style="padding:8px 10px;">
+        <div style="background:#D1FAE5;border-radius:5px;padding:8px;font-size:11px;">
+          <div style="font-weight:600;color:#065F46;margin-bottom:4px;">✓ 已载入 MBD 模型</div>
+          <div style="color:#1F2937;">某型飞机蒙皮装配工艺.CATProduct</div>
+          <div style="color:#6B7280;font-size:10px;margin-top:2px;">PMI标注: 2,847 条 | 解析: 99.1%</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:8px 10px;border-top:1px solid #E2E8F0;">
+      <div style="font-size:11px;font-weight:600;color:var(--primary);margin-bottom:6px;">解析进度</div>
+      <div style="margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:3px;">
+          <span>第一层: PMI引擎</span><span style="color:#22C55E;">✓ 99.1%</span>
+        </div>
+        <div style="height:4px;background:#E2E8F0;border-radius:2px;"><div style="height:100%;width:99%;background:#22C55E;border-radius:2px;"></div></div>
+      </div>
+      <div style="margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:3px;">
+          <span>第二层: LLM 解析</span><span style="color:#22C55E;">✓ 92.3%</span>
+        </div>
+        <div style="height:4px;background:#E2E8F0;border-radius:2px;"><div style="height:100%;width:92%;background:#22C55E;border-radius:2px;"></div></div>
+      </div>
+      <div style="margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:3px;">
+          <span>第三层: 人工审核</span><span style="color:#F59E0B;">3 待审</span>
+        </div>
+        <div style="height:4px;background:#E2E8F0;border-radius:2px;"><div style="height:100%;width:45%;background:#F59E0B;border-radius:2px;"></div></div>
+      </div>
+      <div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:5px;padding:6px;font-size:10px;color:#D97706;text-align:center;">
+        ⚠ 3 条约束置信度 &lt;0.80，进入审核队列
+      </div>
+    </div>
+
+    <!-- Confidence Heatmap -->
+    <div style="padding:8px 10px;border-top:1px solid #E2E8F0;">
+      <div style="font-size:11px;font-weight:600;color:var(--primary);margin-bottom:6px;">置信度热力图</div>
+      <div style="display:grid;grid-template-columns:repeat(10,1fr);gap:2px;">
+        <div style="height:12px;border-radius:2px;background:#22C55E;"></div>
+        <div style="height:12px;border-radius:2px;background:#22C55E;"></div>
+        <div style="height:12px;border-radius:2px;background:#22C55E;"></div>
+        <div style="height:12px;border-radius:2px;background:#84CC16;"></div>
+        <div style="height:12px;border-radius:2px;background:#22C55E;"></div>
+        <div style="height:12px;border-radius:2px;background:#EAB308;"></div>
+        <div style="height:12px;border-radius:2px;background:#22C55E;"></div>
+        <div style="height:12px;border-radius:2px;background:#EF4444;"></div>
+        <div style="height:12px;border-radius:2px;background:#22C55E;"></div>
+        <div style="height:12px;border-radius:2px;background:#EAB308;"></div>
+        <div style="height:12px;border-radius:2px;background:#22C55E;"></div>
+        <div style="height:12px;border-radius:2px;background:#22C55E;"></div>
+        <div style="height:12px;border-radius:2px;background:#EF4444;"></div>
+        <div style="height:12px;border-radius:2px;background:#22C55E;"></div>
+        <div style="height:12px;border-radius:2px;background:#22C55E;"></div>
+        <div style="height:12px;border-radius:2px;background:#84CC16;"></div>
+        <div style="height:12px;border-radius:2px;background:#22C55E;"></div>
+        <div style="height:12px;border-radius:2px;background:#EAB308;"></div>
+        <div style="height:12px;border-radius:2px;background:#22C55E;"></div>
+        <div style="height:12px;border-radius:2px;background:#22C55E;"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-muted);margin-top:4px;">
+        <span>低置信度</span><span>高置信度</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER: JSON Editor + KG -->
+  <div class="panel-center">
+    <div class="canvas-toolbar">
+      <div class="canvas-tool active">📝 约束编辑器</div>
+      <div class="canvas-tool" onclick="showKG()">🕸 知识图谱</div>
+      <div class="canvas-tool">🔗 溯源视图</div>
+      <div style="width:1px;height:20px;background:rgba(255,255,255,0.2);margin:0 4px;"></div>
+      <div class="canvas-tool">⚠ 冲突: 2</div>
+      <div class="canvas-tool">🔍 过滤约束</div>
+      <div style="margin-left:auto;display:flex;gap:6px;">
+        <div class="canvas-tool">LLM: Qwen2-72B (私有化)</div>
+        <div class="canvas-tool">导出 ConstraintSet JSON</div>
+      </div>
+    </div>
+
+    <div class="sop-editor" id="json-editor">
+      <div class="sop-line"><span class="sop-lnum">1</span><span style="color:#7DD3FC;">{</span></div>
+      <div class="sop-line"><span class="sop-lnum">2</span><span class="sop-key">&nbsp;&nbsp;"constraint_set_id"</span><span>: </span><span class="sop-str">"cs-uuid-v4-2024-001"</span><span>,</span></div>
+      <div class="sop-line"><span class="sop-lnum">3</span><span class="sop-key">&nbsp;&nbsp;"version"</span><span>: </span><span class="sop-str">"v2.0.1"</span><span>,</span></div>
+      <div class="sop-line sop-ok"><span class="sop-lnum">4</span><span class="sop-key">&nbsp;&nbsp;"constraints"</span><span>: [</span></div>
+      <div class="sop-line sop-ok"><span class="sop-lnum">5</span><span>&nbsp;&nbsp;&nbsp;&nbsp;{</span></div>
+      <div class="sop-line sop-ok"><span class="sop-lnum">6</span><span class="sop-key">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"id"</span><span>: </span><span class="sop-str">"C001"</span><span>,</span></div>
+      <div class="sop-line sop-ok"><span class="sop-lnum">7</span><span class="sop-key">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"type"</span><span>: </span><span class="sop-str">"HARD"</span><span>,</span></div>
+      <div class="sop-line sop-ok"><span class="sop-lnum">8</span><span class="sop-key">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"category"</span><span>: </span><span class="sop-str">"FIXTURE_SPATIAL_EXCLUSION"</span><span>,</span></div>
+      <div class="sop-line sop-ok"><span class="sop-lnum">9</span><span class="sop-key">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"rule"</span><span>: { </span><span class="sop-key">"relation"</span><span>: </span><span class="sop-str">"EXCLUSION"</span><span>, </span><span class="sop-key">"entity_a"</span><span>: </span><span class="sop-str">"MDI-2024-007"</span><span>, </span><span class="sop-key">"entity_b"</span><span>: </span><span class="sop-str">"CRANE-A"</span><span> },</span></div>
+      <div class="sop-line sop-ok"><span class="sop-lnum">10</span><span class="sop-key">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"confidence"</span><span>: </span><span class="sop-num">0.98</span><span>,</span></div>
+      <div class="sop-line sop-ok"><span class="sop-lnum">11</span><span class="sop-key">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"source_ref"</span><span>: { </span><span class="sop-key">"document"</span><span>: </span><span class="sop-str">"蒙皮装配工艺规程_v3.1.pdf"</span><span>, </span><span class="sop-key">"page"</span><span>: </span><span class="sop-num">23</span><span> }</span></div>
+      <div class="sop-line sop-ok"><span class="sop-lnum">12</span><span>&nbsp;&nbsp;&nbsp;&nbsp;},</span></div>
+      <div class="sop-line sop-conflict"><span class="sop-lnum">13</span><span>&nbsp;&nbsp;&nbsp;&nbsp;{</span></div>
+      <div class="sop-line sop-conflict"><span class="sop-lnum">14</span><span class="sop-key">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"id"</span><span>: </span><span class="sop-str">"C045"</span><span>,</span><span style="color:#F87171;margin-left:8px;">// ⚠ 与 C023 冲突: 间距要求矛盾</span></div>
+      <div class="sop-line sop-conflict"><span class="sop-lnum">15</span><span class="sop-key">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"type"</span><span>: </span><span class="sop-str">"HARD"</span><span>, </span><span class="sop-key">"category"</span><span>: </span><span class="sop-str">"SPATIAL"</span><span>,</span></div>
+      <div class="sop-line sop-conflict"><span class="sop-lnum">16</span><span class="sop-key">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"rule"</span><span>: { </span><span class="sop-key">"relation"</span><span>: </span><span class="sop-str">"MIN_DISTANCE"</span><span>, </span><span class="sop-key">"value"</span><span>: </span><span class="sop-num">500</span><span>, </span><span class="sop-key">"unit"</span><span>: </span><span class="sop-str">"mm"</span><span> }</span></div>
+      <div class="sop-line sop-conflict"><span class="sop-lnum">17</span><span class="sop-key">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"confidence"</span><span>: </span><span class="sop-num">0.87</span></div>
+      <div class="sop-line sop-conflict"><span class="sop-lnum">18</span><span>&nbsp;&nbsp;&nbsp;&nbsp;},</span></div>
+      <div class="sop-line sop-review"><span class="sop-lnum">19</span><span>&nbsp;&nbsp;&nbsp;&nbsp;{</span></div>
+      <div class="sop-line sop-review"><span class="sop-lnum">20</span><span class="sop-key">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"id"</span><span>: </span><span class="sop-str">"C089"</span><span>,</span><span style="color:#FBBF24;margin-left:8px;">// ⚡ 置信度 0.71 &lt; 0.80 → 人工审核</span></div>
+      <div class="sop-line sop-review"><span class="sop-lnum">21</span><span class="sop-key">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"type"</span><span>: </span><span class="sop-str">"HARD"</span><span>, </span><span class="sop-key">"category"</span><span>: </span><span class="sop-str">"TORQUE_SEQUENCE"</span><span>,</span></div>
+      <div class="sop-line sop-review"><span class="sop-lnum">22</span><span class="sop-key">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"rule"</span><span>: { </span><span class="sop-key">"torque_Nm_steps"</span><span>: </span><span class="sop-num">[8, 16, 25]</span><span>, </span><span class="sop-key">"sequence"</span><span>: </span><span class="sop-str">"cross_pattern"</span><span> },</span></div>
+      <div class="sop-line sop-review"><span class="sop-lnum">23</span><span class="sop-key">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"confidence"</span><span>: </span><span style="color:#F87171;">0.71</span><span>, </span><span class="sop-key">"requires_human_review"</span><span>: </span><span style="color:#F97316;">true</span></div>
+      <div class="sop-line sop-review"><span class="sop-lnum">24</span><span>&nbsp;&nbsp;&nbsp;&nbsp;},</span></div>
+      <div class="sop-line sop-ok"><span class="sop-lnum">25</span><span>&nbsp;&nbsp;&nbsp;&nbsp;{</span></div>
+      <div class="sop-line sop-ok"><span class="sop-lnum">26</span><span class="sop-key">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"id"</span><span>: </span><span class="sop-str">"AVC-003"</span><span>,</span></div>
+      <div class="sop-line sop-ok"><span class="sop-lnum">27</span><span class="sop-key">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"category"</span><span>: </span><span class="sop-str">"ENVIRONMENTAL"</span><span>,</span></div>
+      <div class="sop-line sop-ok"><span class="sop-lnum">28</span><span class="sop-key">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"rule"</span><span>: </span><span class="sop-str">"复合材料铺层区域温湿度: 18-28°C，湿度&lt;65%"</span><span>,</span></div>
+      <div class="sop-line sop-ok"><span class="sop-lnum">29</span><span class="sop-key">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"confidence"</span><span>: </span><span class="sop-num">0.99</span><span>, </span><span class="sop-key">"auto_suspend_on_violation"</span><span>: </span><span style="color:#F97316;">true</span></div>
+      <div class="sop-line sop-ok"><span class="sop-lnum">30</span><span>&nbsp;&nbsp;&nbsp;&nbsp;}</span></div>
+      <div class="sop-line"><span class="sop-lnum">31</span><span>&nbsp;&nbsp;]</span></div>
+      <div class="sop-line"><span class="sop-lnum">32</span><span style="color:#7DD3FC;">}</span></div>
+    </div>
+
+    <!-- STATUS BAR (PRD-2) -->
+    <div class="status-bar">
+      <div class="status-item"><span class="status-ok">✓</span><span>约束总数: 1,284</span></div>
+      <div class="status-item"><span class="status-error">⚠</span><span style="color:#F87171;">冲突: 2 条</span></div>
+      <div class="status-item"><span class="status-warn">⚑</span><span style="color:#FBBF24;">待审核: 3 条</span></div>
+      <div class="status-item"><span class="status-ok">✓</span><span>溯源率: 99.2%</span></div>
+      <div class="status-item"><span class="status-ok">✓</span><span>Z3 冲突检测完成</span></div>
+      <div style="margin-left:auto;" class="status-item"><span style="color:rgba(255,255,255,0.4);">ConstraintSet v2.0.1 | Neo4j KG已同步 | Qwen2-72B 私有化</span></div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL: Source trace + Review queue -->
+  <div class="panel-right">
+    <div class="panel-header"><div class="dot"></div>原文溯源 & 审核队列</div>
+
+    <div class="right-section" style="flex-shrink:0;">
+      <div class="right-section-title">📄 原文溯源 · C001</div>
+      <div style="padding:8px 10px;">
+        <div style="background:#F0F5FA;border-radius:5px;padding:8px;font-size:11px;line-height:1.6;border-left:3px solid var(--primary);">
+          <div style="color:var(--text-muted);font-size:10px;margin-bottom:4px;">蒙皮装配工艺规程_v3.1.pdf · 第23页 · §5.2.3</div>
+          <div>...蒙皮对接型架（F-2024-007）占用<span style="background:#FBBF24;color:#1E2937;padding:1px 3px;border-radius:2px;font-weight:600;">3号站位</span>时，禁止相邻<span style="background:#FBBF24;color:#1E2937;padding:1px 3px;border-radius:2px;font-weight:600;">2号、4号站位</span>进行起吊作业，防止吊装干涉...</div>
+          <div style="margin-top:6px;color:var(--secondary);font-size:10px;">PMI引用: CATIA://wing_skin.CATProduct#PMI-00234</div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:6px;">
+          <button onclick="alert('在3D视图中高亮显示 PMI-00234 标注位置...')" style="flex:1;background:#EFF6FF;border:1px solid #93C5FD;color:var(--primary);padding:5px;border-radius:4px;font-size:10px;cursor:pointer;">🎯 PMI定位</button>
+          <button onclick="alert('打开原始PDF，跳转至第23页...')" style="flex:1;background:#F0F5FA;border:1px solid #CBD5E0;color:var(--text-main);padding:5px;border-radius:4px;font-size:10px;cursor:pointer;">📄 原文跳转</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:1;overflow-y:auto;">
+      <div class="right-section-title">
+        <span>⚡ 人工审核队列</span>
+        <span style="background:#FEE2E2;color:#991B1B;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;">3 待处理</span>
+      </div>
+
+      <div class="review-item" onclick="expandReview(this)">
+        <div class="ri-id">C089 · TORQUE_SEQUENCE · 置信度 0.71</div>
+        <div class="ri-text">发动机安装螺栓按十字交叉顺序拧紧，分三次至额定力矩 [8, 16, 25] Nm</div>
+        <div class="ri-conf">LLM解析依据: "GJB标准" 术语匹配，但力矩值不确定</div>
+        <div class="review-actions">
+          <button class="btn-approve" onclick="approveConstraint(event, 'C089')">✓ 确认</button>
+          <button class="btn-reject" onclick="rejectConstraint(event, 'C089')">✗ 驳回</button>
+          <button style="background:#E0F2FE;color:#075985;border:none;padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;" onclick="alert('查看LLM解析依据:\n\n原文: 螺栓紧固按十字交叉方式...\n识别实体: torque_sequence\n相似度: 0.71\n建议参考: GJB 5116-2004')">LLM依据</button>
+        </div>
+      </div>
+
+      <div class="review-item">
+        <div class="ri-id">C102 · SAFETY · 置信度 0.75</div>
+        <div class="ri-text">油箱内部作业须双人配合，通风换气≥30分钟后方可入内</div>
+        <div class="ri-conf">安全等级: LIFE_CRITICAL | 需要作业许可证</div>
+        <div class="review-actions">
+          <button class="btn-approve" onclick="approveConstraint(event, 'C102')">✓ 确认</button>
+          <button class="btn-reject" onclick="rejectConstraint(event, 'C102')">✗ 驳回</button>
+          <button style="background:#E0F2FE;color:#075985;border:none;padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;">LLM依据</button>
+        </div>
+      </div>
+
+      <div class="review-item">
+        <div class="ri-id">C115 · CRITICAL_FASTENER · 置信度 0.78</div>
+        <div class="ri-text">蒙皮铆接每孔完成后目视检查，合格后进行下一孔</div>
+        <div class="ri-conf">违规后果: SAFETY_CRITICAL | HB/Z 223-2013</div>
+        <div class="review-actions">
+          <button class="btn-approve" onclick="approveConstraint(event, 'C115')">✓ 确认</button>
+          <button class="btn-reject" onclick="rejectConstraint(event, 'C115')">✗ 驳回</button>
+          <button style="background:#E0F2FE;color:#075985;border:none;padding:3px 8px;border-radius:4px;font-size:10px;cursor:pointer;">LLM依据</button>
+        </div>
+      </div>
+
+      <!-- Conflict section -->
+      <div class="right-section-title" style="margin-top:4px;">
+        <span>🔴 约束冲突</span>
+        <span style="background:#FEE2E2;color:#991B1B;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;">2 冲突</span>
+      </div>
+      <div style="margin:6px 10px;padding:8px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;font-size:11px;">
+        <div style="font-weight:700;color:#DC2626;margin-bottom:4px;">C023 vs C045 · 间距矛盾</div>
+        <div style="color:var(--text-main);">C023: F-2024-007 与 F-2024-008 间距 ≥ 200mm</div>
+        <div style="color:var(--text-main);margin-top:2px;">C045: F-2024-007 与 F-2024-008 间距 ≥ 500mm</div>
+        <div style="margin-top:6px;font-size:10px;color:var(--text-muted);">MBOM优先，建议采用 C045 (500mm)</div>
+        <div style="display:flex;gap:5px;margin-top:6px;">
+          <button onclick="alert('采用 C045 (500mm)，归档 C023')" style="flex:1;background:#DC2626;color:white;border:none;padding:4px;border-radius:4px;font-size:10px;cursor:pointer;">仲裁: 采用C045</button>
+          <button onclick="alert('查看两条约束的完整原文...')" style="flex:1;background:#F0F5FA;border:1px solid #CBD5E0;color:var(--text-main);padding:4px;border-radius:4px;font-size:10px;cursor:pointer;">双向溯源</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PLACEHOLDER MODULES 3,4,5 -->
+<div id="module3" class="app-body" style="display:none;align-items:center;justify-content:center;background:#F4F7FB;flex-direction:column;gap:16px;">
+  <div style="font-size:48px;">⚙️</div>
+  <div style="font-size:20px;font-weight:700;color:var(--primary);">PRD-3: 约束驱动布局优化</div>
+  <div style="color:var(--text-muted);font-size:14px;">DRL算法 · 多目标Pareto优化 · 干涉检测 · AR预览</div>
+  <div style="background:white;border:1px solid #E2E8F0;border-radius:8px;padding:20px;max-width:500px;font-size:13px;color:var(--text-muted);line-height:1.8;">
+    <div>✅ 输入: SiteModel v1.2.3 + ConstraintSet v2.0.1</div>
+    <div>✅ 检查点B通过 → 可进入布局阶段</div>
+    <div>⏳ 待开发: DRL布局生成算法、Pareto前沿展示、吊运路径干涉检测</div>
+  </div>
+</div>
+<div id="module4" class="app-body" style="display:none;align-items:center;justify-content:center;background:#F4F7FB;flex-direction:column;gap:16px;">
+  <div style="font-size:48px;">📊</div>
+  <div style="font-size:20px;font-weight:700;color:var(--primary);">PRD-4: 脉动线仿真验证</div>
+  <div style="color:var(--text-muted);font-size:14px;">FlexSim集成 · 节拍平衡 · 误差累积预测 · 瓶颈诊断</div>
+</div>
+<div id="module5" class="app-body" style="display:none;align-items:center;justify-content:center;background:#F4F7FB;flex-direction:column;gap:16px;">
+  <div style="font-size:48px;">📋</div>
+  <div style="font-size:20px;font-weight:700;color:var(--primary);">PRD-5: 内部决策报告生成</div>
+  <div style="color:var(--text-muted);font-size:14px;">全链路数据汇聚 · 投资决策支持文件（内部参考）</div>
+</div>
+
+<script>
+// Module switching
+function switchModule(n, el) {
+  // Hide all modules
+  [1,2,3,4,5].forEach(i => {
+    const m = document.getElementById('module' + i);
+    if (m) m.style.display = 'none';
+  });
+  // Show selected
+  const target = document.getElementById('module' + n);
+  if (target) target.style.display = 'flex';
+  // Update tabs
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  // Update checkpoint banner
+  const cb = document.getElementById('checkpoint-bar');
+  if (n === 1) {
+    cb.style.display = 'flex';
+  } else if (n === 2) {
+    cb.innerHTML = `<span class="cp-step">检查点 B</span>
+      <span style="color:rgba(255,255,255,0.6)">布局优化 → 仿真验证 交接检查：</span>
+      <div class="cp-check"><div class="ck done">✓</div><span>布局版本锁定</span></div>
+      <span class="cp-sep">|</span>
+      <div class="cp-check"><div class="ck">!</div><span style="color:#FBBF24">硬约束待全部通过</span></div>
+      <span class="cp-sep">|</span>
+      <div class="cp-check"><div class="ck">!</div><span style="color:#FBBF24">干涉检测待完成</span></div>
+      <span class="cp-sep">|</span>
+      <div class="cp-check"><div class="ck done">✓</div><span>检修通道≥1200mm</span></div>
+      <div class="cp-lock">🔒 锁版确认</div>`;
+    cb.style.display = 'flex';
+  } else {
+    cb.style.display = 'none';
+  }
+}
+
+// Upload handler
+function handleUpload() {
+  alert('支持拖拽或点击上传：\n\nDWG 2018+ · RVT 2022+ · IFC · .LAS · .E57 · JT\n\n系统将自动：\n1. 识别图层语义（航空专属规则库）\n2. 提取地沟/吊车梁/型架基础/禁区\n3. 坐标系锚定（基准点法，精度≤1mm）\n4. Asset实例化并匹配 master_device_id');
+}
+
+// Layer selection
+function selectLayer(layerId, el) {
+  document.querySelectorAll('#module1 .tree-item').forEach(t => t.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+// Station selection
+function selectStation(name, el) {
+  document.querySelectorAll('.station').forEach(s => s.classList.remove('selected'));
+  el.classList.add('selected');
+  const tt = document.getElementById('canvas-tooltip');
+  tt.style.display = 'block';
+  setTimeout(() => { tt.style.display = 'none'; }, 4000);
+}
+
+// Canvas click
+function handleCanvasClick(e) {
+  if (e.target.classList.contains('canvas-area')) {
+    document.getElementById('canvas-tooltip').style.display = 'none';
+    document.getElementById('pit-popup').style.display = 'none';
+  }
+}
+
+// Pit info popup
+function showPitInfo(e) {
+  e.stopPropagation();
+  const popup = document.getElementById('pit-popup');
+  popup.style.display = 'block';
+  popup.style.left = (e.clientX - 200) + 'px';
+  popup.style.top = (e.clientY - 180) + 'px';
+}
+
+// Version change
+function handleVersionChange() {
+  alert('正在加载历史版本 SiteModel，将展示 Diff 视图...');
+}
+
+// Show diff
+function showDiff() {
+  alert('版本对比 Diff 视图：\n\n✅ 新增: PIT-003 地坑（3号站位下方）\n🔄 修改: CRANE-B 轨迹 Y坐标 +150mm\n⚠️ 影响: STN-03 站位约束需重新验证\n\n请人工确认变更项后生成新版本。');
+}
+
+// Mark unknown layer
+function markLayer(el) {
+  const layerName = el.querySelector('.layer-dot').nextSibling.textContent.trim();
+  const semantic = prompt(`手动标注图层: ${layerName}\n\n请输入语义标签（可选）:\n- station_boundary\n- heavy_fixture_base\n- restricted_zone_pit\n- overhead_crane_path\n- logistics_path\n- safety_restricted\n- load_restricted`, 'station_boundary');
+  if (semantic) {
+    const tag = el.querySelector('.tag-unrecog');
+    if (tag) {
+      tag.className = 'tag-matched';
+      tag.textContent = '✓ 已标注';
+    }
+  }
+}
+
+// Show constraint detail
+function showConstraintDetail(id) {
+  alert(`约束详情: ${id}\n\n已在原文溯源面板高亮显示原始依据。\n点击 PMI定位 可在3D视图中查看约束位置。`);
+}
+
+// Upload tab switch
+function switchUploadTab(tab, el) {
+  document.querySelectorAll('.upload-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  const msgs = { mbd: '切换到 MBD 三维模型解析模式', sop: '切换到 文字SOP/工艺规程解析模式', mbom: '切换到 工艺MBOM导入模式 (Teamcenter/ENOVIA)' };
+  console.log(msgs[tab]);
+}
+
+// Approve / Reject constraint
+function approveConstraint(e, id) {
+  e.stopPropagation();
+  const card = e.target.closest('.review-item');
+  card.style.background = '#D1FAE5';
+  card.style.border = '1px solid #6EE7B7';
+  card.querySelector('.ri-id').textContent = `${id} · ✓ 已确认`;
+  card.querySelector('.review-actions').innerHTML = '<span style="font-size:10px;color:#065F46;font-weight:600;">✅ 工艺工程师已确认，约束已加入训练数据</span>';
+}
+
+function rejectConstraint(e, id) {
+  e.stopPropagation();
+  const card = e.target.closest('.review-item');
+  card.style.background = '#FEE2E2';
+  card.style.border = '1px solid #FCA5A5';
+  card.querySelector('.ri-id').textContent = `${id} · ✗ 已驳回`;
+  card.querySelector('.review-actions').innerHTML = '<span style="font-size:10px;color:#991B1B;font-weight:600;">❌ 约束已标记为无效，记录至反馈数据</span>';
+}
+
+// Show KG
+function showKG() {
+  alert('知识图谱视图：\n\n当前约束知识图谱包含:\n• 892 个工装节点\n• 1,284 条约束边\n• 6 类约束类型\n\n支持操作：\n• 拖拽连接两节点 → 创建手动约束\n• 点击节点 → 查看所有关联约束\n• 路径高亮 → 显示工序变更影响链');
+}
+
+function expandReview(el) {
+  // highlight selected
+  document.querySelectorAll('.review-item').forEach(r => r.style.outline = 'none');
+  el.style.outline = '2px solid #F59E0B';
+}
+</script>
+<script>window.parent.postMessage({ action: "ready" }, "*"); 
+ 
+window.console = new Proxy(console, {
+  get(target, prop) {
+    if (['log', 'warn', 'error'].includes(prop)) {
+      return new Proxy(target[prop], {
+        apply(fn, thisArg, args) {
+          fn.apply(thisArg, args);
+          window.parent.postMessage({ action: 'console', 
+            type: prop, 
+            args: args.map((arg) => {
+              try {
+                return JSON.stringify(arg).replace(/^["']|["']$/g, '');
+              } catch (e) {
+                return arg;
+              }
+            }) 
+          }, '*');
+        }
+      });
+    }
+    return target[prop];
+  }
+});
+</script></body>
+</html>

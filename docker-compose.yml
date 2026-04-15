@@ -1,0 +1,108 @@
+# ════════════════ ProLine CAD — 开发环境基础设施 ════════════════
+# 用法:
+#   docker-compose up -d                  # 启动全部
+#   docker-compose up -d postgres minio   # 仅核心服务
+#   docker-compose down                   # 停止并移除
+
+services:
+  # ── PostgreSQL (SiteModel、mcp_context、audit) ──
+  postgres:
+    image: postgres:15-alpine
+    container_name: proline-postgres
+    environment:
+      POSTGRES_DB: proline_cad
+      POSTGRES_USER: proline
+      POSTGRES_PASSWORD: proline_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U proline -d proline_cad"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── MinIO (对象存储 — proof artifacts、PDF、CAD 文件) ──
+  minio:
+    image: minio/minio:latest
+    container_name: proline-minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Kafka + Zookeeper (Agent 间消息队列) ──
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: proline-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: proline-kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9092:9092"
+
+  # ── Blazegraph (GraphDB — Ontology RDF/JSON-LD) ──
+  blazegraph:
+    image: lyrasis/blazegraph:2.1.6-inferencing
+    container_name: proline-blazegraph
+    ports:
+      - "9999:9999"
+    volumes:
+      - blazegraph_data:/var/lib/blazegraph
+
+  # ── Milvus Standalone (向量数据库 — SOP 段落检索) ──
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.12
+    container_name: proline-etcd
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+    command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls=http://0.0.0.0:2379 --data-dir /etcd
+
+  milvus:
+    image: milvusdb/milvus:v2.4.0
+    container_name: proline-milvus
+    depends_on:
+      - etcd
+      - minio
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    volumes:
+      - milvus_data:/var/lib/milvus
+
+volumes:
+  postgres_data:
+  minio_data:
+  blazegraph_data:
+  milvus_data:

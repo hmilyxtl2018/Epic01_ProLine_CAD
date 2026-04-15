@@ -1,0 +1,61 @@
+{
+  "description": "Spike-05 LLM SOP提取真实测试数据 — FAA Advisory Circulars (公共领域航空制造/维修标准)",
+  "source": "FAA (Federal Aviation Administration)",
+  "license": "U.S. Government Public Domain",
+  "purpose": "用于验证LLM从真实SOP文档提取 ConstraintSet + ProcessGraph 的能力",
+  "files": [
+    {
+      "file": "FAA_AC43.13-1B_Inspection_Repair.pdf",
+      "title": "AC 43.13-1B: Acceptable Methods, Techniques, and Practices — Aircraft Inspection and Repair",
+      "sizeMB": 20.1,
+      "pages": 646,
+      "keywords": ["repair", "rivet", "inspect", "bond", "procedure", "pressure", "sheet metal", "composite"],
+      "desc": "航空器检查与修理标准方法 — 包含铆接、钣金成型、复合材料修复、焊接、腐蚀处理等完整工艺步骤",
+      "test_value": "最全面的工艺参考文档，含步骤序列、工具要求、检验标准、安全约束"
+    },
+    {
+      "file": "FAA_AC43-214_Composite_Repair.pdf",
+      "title": "AC 43-214: Composite Aircraft Structure",
+      "sizeKB": 170,
+      "pages": 21,
+      "keywords": ["repair", "process", "procedure", "bond", "inspect", "cure", "composite", "layup"],
+      "desc": "复合材料飞机结构修复指南 — 铺层/固化/粘接工艺流程、温度/压力参数",
+      "test_value": "与PRD产线场景最匹配: 复合材料工艺步骤+温度/压力/时间约束"
+    },
+    {
+      "file": "FAA_AC21-26A_Quality_System.pdf",
+      "title": "AC 21-26A: Quality System for the Manufacture of Composite Structures",
+      "sizeKB": 2377,
+      "pages": 15,
+      "keywords": ["process", "procedure", "cure", "temperature", "inspect", "bond", "quality"],
+      "desc": "复合材料结构制造质量体系 — 工艺过程控制、固化曲线、温度监控、检验方法",
+      "test_value": "质量控制流程+工艺参数约束提取测试"
+    },
+    {
+      "file": "FAA_AC145-10_Repair_Station.pdf",
+      "title": "AC 145-10: Repair Station Certification and Operations",
+      "sizeKB": 496,
+      "pages": 41,
+      "keywords": ["repair", "inspect", "procedure", "apply", "process"],
+      "desc": "维修站认证与运营 — 维修流程、人员资质、工具校准、质量检验程序",
+      "test_value": "维修站SOP提取: 流程依赖关系+人员/工具约束"
+    },
+    {
+      "file": "FAA_AC21.303_Parts_Manufacturing.pdf",
+      "title": "AC 21.303: Parts Manufacturer Approval Procedures",
+      "sizeKB": 316,
+      "pages": 32,
+      "keywords": ["install", "process", "procedure", "inspect", "repair", "apply"],
+      "desc": "零件制造商批准程序 — 制造工艺审批、检验流程、合规要求",
+      "test_value": "制造审批SOP: 多步骤审批流程+合规约束提取"
+    }
+  ],
+  "validation_summary": {
+    "total_files": 5,
+    "all_valid_pdf": true,
+    "total_pages": 755,
+    "best_for_constraint_extraction": ["FAA_AC21-26A_Quality_System.pdf", "FAA_AC43-214_Composite_Repair.pdf"],
+    "best_for_process_graph": ["FAA_AC43.13-1B_Inspection_Repair.pdf", "FAA_AC145-10_Repair_Station.pdf"],
+    "note": "所有文档为美国政府公共领域文件，可自由用于研究测试"
+  }
+}

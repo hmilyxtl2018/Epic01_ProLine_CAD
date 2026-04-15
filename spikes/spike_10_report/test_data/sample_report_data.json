@@ -1,0 +1,60 @@
+{
+  "description": "Spike-10 报告生成测试 — 样例数据",
+  "version": "1.0",
+  "report_data": {
+    "project_name": "C919机身总装线",
+    "project_id": "PRJ-C919-FAL-2026",
+    "review_date": "2026-05-01",
+    "version": "V1.0",
+    "line_name": "C919脉动总装线",
+    "factory_area": 36000,
+    "equipment_count": 42,
+    "station_count": 6,
+    "target_annual_output": 50,
+
+    "collision_count": 0,
+    "collision_status": "✅ PASS",
+    "safety_zone_violations": 2,
+    "safety_status": "⚠️ WARN",
+    "exclusion_zone_violations": 0,
+    "exclusion_status": "✅ PASS",
+    "passage_violations": 1,
+    "passage_status": "⚠️ WARN",
+
+    "collision_details": [
+      {"item": "EQ-211与EQ-201安全区重叠", "severity": "WARNING", "distance_mm": -500},
+      {"item": "EQ-232占用AGV通道边缘", "severity": "WARNING", "distance_mm": -200}
+    ],
+
+    "constraints": {
+      "env": {"total": 8, "pass": 7, "fail": 1},
+      "space": {"total": 12, "pass": 10, "fail": 2},
+      "time": {"total": 6, "pass": 6, "fail": 0},
+      "safety": {"total": 5, "pass": 5, "fail": 0}
+    },
+
+    "constraint_violations": [
+      {"id": "WBJ-C07", "rule": "15m范围内禁止同时钻铆", "actual": "EQ-201距对接工位仅12m", "suggestion": "将EQ-201向北移3m"},
+      {"id": "FSP-C03", "rule": "钻铆机8m范围内禁放精密测量设备", "actual": "EQ-211激光跟踪仪距钻铆机仅6m", "suggestion": "为激光跟踪仪设置隔振底座或增加间距"}
+    ],
+
+    "simulation": {
+      "annual_output": 46,
+      "takt_time": 76.5,
+      "bottleneck_station": "ST-2 翼身对接+起落架",
+      "avg_utilization": 82.3,
+      "target_takt_time": 72
+    },
+
+    "issues": [
+      {"category": "空间", "description": "激光跟踪仪(EQ-211)距自动钻铆机(EQ-201)过近，振动干扰", "severity": "HIGH", "suggestion": "增加间距至8m以上或安装隔振装置"},
+      {"category": "空间", "description": "EQ-232功能测试台占用AGV通道边缘", "severity": "MEDIUM", "suggestion": "向南移动1m"},
+      {"category": "产能", "description": "ST-2 OEE偏低(0.80)导致年产量仅46架，未达50架目标", "severity": "HIGH", "suggestion": "增加ST-2工装冗余或优化对接流程"}
+    ],
+
+    "review_result": "有条件通过",
+    "engineer_name": "张工",
+    "qa_name": "李检",
+    "pm_name": "王总"
+  }
+}

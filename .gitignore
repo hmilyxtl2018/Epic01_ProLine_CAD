@@ -1,0 +1,71 @@
+# ════════════════ Python ════════════════
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+*.whl
+
+# ════════════════ Virtual Environment ════════════════
+.venv/
+venv/
+ENV/
+
+# ════════════════ IDE / Editor ════════════════
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ════════════════ Testing ════════════════
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+
+# ════════════════ Type Checking ════════════════
+.mypy_cache/
+.pytype/
+
+# ════════════════ Environment ════════════════
+.env
+.env.local
+.env.*.local
+*.env
+
+# ════════════════ OS ════════════════
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ════════════════ Docker ════════════════
+docker-compose.override.yml
+
+# ════════════════ Storage / Data (runtime) ════════════════
+*.log
+logs/
+data/
+*.db
+*.sqlite3
+
+# ════════════════ Build Artifacts ════════════════
+node_modules/
+*.min.js
+*.min.css
+
+# ════════════════ Secrets ════════════════
+*.pem
+*.key
+*.cert
+secrets/

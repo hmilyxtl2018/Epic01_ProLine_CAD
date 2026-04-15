@@ -1,0 +1,2148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PRD-1 · 语义化底图解析与环境构建 · 航空产线AI规划系统</title>
+<style>
+/* ===== CSS Variables ===== */
+:root {
+  --primary: #0284C8;
+  --primary-light: #0369A1;
+  --secondary: #0EA5E9;
+  --accent: #10B981;
+  --accent-glow: rgba(16,185,129,0.3);
+  --success: #4CAF50;
+  --warning: #FF9800;
+  --danger: #F44336;
+  --info: #0EA5E9;
+  --text: #1E2937;
+  --text-dim: #64748B;
+  --text-dark: #FFFFFF;
+  --bg-dark: #F8FAFC;
+  --bg-panel: #FFFFFF;
+  --bg-card: #F1F5F9;
+  --bg-hover: #E2E8F0;
+  --border: rgba(100,116,139,0.2);
+  --border-light: rgba(100,116,139,0.12);
+  --ont-red: #FF5252;
+  --ont-blue: #448AFF;
+  --ont-green: #69F0AE;
+  --ont-orange: #FFAB40;
+  --ont-purple: #E040FB;
+  --pit-color: #2196F3;
+  --crane-color: #FF9800;
+  --foundation-color: #FFEB3B;
+  --zone-color: rgba(244,67,54,0.3);
+  --asset-color: #4CAF50;
+  --station-color: #9C27B0;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif; background: var(--bg-dark); color: var(--text); overflow: hidden; height: 100vh; font-size: 13px; }
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--secondary); }
+
+/* ===== Top Navigation ===== */
+.topnav {
+  background: var(--primary);
+  height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 6px;
+  border-bottom: 1px solid var(--accent);
+  flex-shrink: 0;
+  z-index: 100;
+  position: relative;
+}
+.logo { color: white; font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.logo-icon { width: 28px; height: 28px; background: linear-gradient(135deg, var(--accent), var(--secondary)); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 900; color: white; }
+.nav-sep { width: 1px; height: 24px; background: rgba(255,255,255,0.15); margin: 0 8px; flex-shrink: 0; }
+
+.nav-tabs { display: flex; gap: 2px; flex-shrink: 0; }
+.nav-tab {
+  color: rgba(255,255,255,0.55);
+  padding: 5px 12px;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  user-select: none;
+}
+.nav-tab:hover { color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.06); }
+.nav-tab.active { color: white; background: rgba(16,185,129,0.15); border-bottom-color: var(--accent); }
+.nav-tab .dot { width: 6px; height: 6px; border-radius: 50%; }
+.nav-tab .dot.blue { background: var(--secondary); }
+.nav-tab .dot.orange { background: var(--warning); }
+.nav-tab .dot.green { background: var(--success); }
+.nav-tab .dot.purple { background: var(--station-color); }
+.nav-tab .dot.red { background: var(--danger); }
+.nav-tab .badge { background: var(--danger); color: white; font-size: 9px; padding: 1px 5px; border-radius: 8px; }
+
+.nav-right { margin-left: auto; display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+.nav-btn {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 5px 12px;
+  border-radius: 5px;
+  font-size: 11px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.nav-btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.nav-btn.outline { background: transparent; border: 1px solid rgba(255,255,255,0.3); }
+.nav-btn.outline:hover { background: rgba(255,255,255,0.08); }
+.nav-btn.danger { background: var(--danger); }
+.nav-btn.success { background: var(--success); }
+.nav-btn.warning { background: var(--warning); color: var(--text-dark); }
+.nav-btn.disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+.version-badge { background: rgba(14,165,233,0.15); color: var(--secondary); border: 1px solid rgba(14,165,233,0.3); padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+.mcp-badge { background: rgba(16,185,129,0.1); color: var(--accent); border: 1px solid rgba(16,185,129,0.25); padding: 3px 8px; border-radius: 4px; font-size: 10px; font-family: monospace; }
+
+/* ===== Object Context Header ===== */
+.obj-context {
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.obj-context .obj-type { color: var(--accent); font-weight: 700; font-size: 12px; }
+.obj-context .obj-id { color: var(--text); font-family: monospace; font-size: 12px; }
+.obj-context .obj-state { padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: 700; }
+.obj-context .obj-state.draft { background: rgba(255,152,0,0.15); color: var(--warning); border: 1px solid rgba(255,152,0,0.3); }
+.obj-context .obj-state.locked { background: rgba(76,175,80,0.15); color: var(--success); border: 1px solid rgba(76,175,80,0.3); }
+.obj-chain { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-dim); }
+.obj-chain .chain-node { padding: 2px 6px; border-radius: 3px; background: var(--bg-card); border: 1px solid var(--border); font-family: monospace; }
+.obj-chain .chain-arrow { color: var(--accent); }
+
+/* ===== Main Layout ===== */
+.app-body { display: flex; height: calc(100vh - 48px); overflow: hidden; }
+.panel-left { width: 260px; background: var(--bg-panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+.panel-center { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+.panel-right { width: 300px; background: var(--bg-panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+
+/* ===== Panel Section ===== */
+.section { border-bottom: 1px solid var(--border); }
+.section-header {
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: color 0.2s;
+}
+.section-header:hover { color: var(--text); }
+.section-header .icon { font-size: 10px; transition: transform 0.2s; }
+.section-header .icon.collapsed { transform: rotate(-90deg); }
+.section-header .count { margin-left: auto; background: var(--bg-card); padding: 1px 6px; border-radius: 8px; font-size: 10px; color: var(--text-dim); }
+.section-header .count.danger { background: rgba(244,67,54,0.15); color: var(--danger); }
+.section-body { padding: 8px 12px; }
+.section-body.collapsed { display: none; }
+
+/* ===== File Upload ===== */
+.upload-zone {
+  border: 2px dashed var(--border-light);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  margin-bottom: 8px;
+}
+.upload-zone:hover { border-color: var(--accent); background: rgba(16,185,129,0.05); }
+.upload-zone .upload-icon { font-size: 24px; margin-bottom: 4px; }
+.upload-zone .upload-text { color: var(--text-dim); font-size: 11px; }
+.upload-zone .upload-formats { color: var(--accent); font-size: 10px; margin-top: 2px; }
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-bottom: 2px;
+}
+.file-item:hover { background: var(--bg-hover); }
+.file-item .file-icon { font-size: 14px; }
+.file-item .file-name { flex: 1; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-item .file-size { color: var(--text-dim); font-size: 10px; white-space: nowrap; }
+.file-item .file-status { font-size: 12px; }
+
+/* ===== Layer Tree ===== */
+.layer-group { margin-bottom: 4px; }
+.layer-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+.layer-group-header:hover { background: var(--bg-hover); }
+.layer-group-header .arrow { font-size: 8px; color: var(--text-dim); transition: transform 0.2s; width: 10px; }
+.layer-group-header .arrow.open { transform: rotate(90deg); }
+.layer-group-header .group-icon { font-size: 12px; }
+.layer-group-header .group-count { margin-left: auto; font-size: 10px; color: var(--text-dim); }
+
+.layer-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: background 0.15s;
+}
+.layer-item:hover { background: var(--bg-hover); }
+.layer-item.selected { background: rgba(16,185,129,0.1); border-left: 2px solid var(--accent); }
+.layer-item.unrecognized { color: var(--danger); }
+.layer-item .layer-color { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.layer-item .layer-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.layer-item .layer-badge { font-size: 9px; padding: 1px 4px; border-radius: 3px; }
+.layer-item .layer-badge.ok { background: rgba(76,175,80,0.15); color: var(--success); }
+.layer-item .layer-badge.warn { background: rgba(244,67,54,0.15); color: var(--danger); }
+
+/* ===== CP-A Checklist ===== */
+.cpa-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  font-size: 11px;
+}
+.cpa-item .cpa-icon { font-size: 14px; flex-shrink: 0; }
+.cpa-item .cpa-label { flex: 1; }
+.cpa-item .cpa-id { color: var(--text-dim); font-family: monospace; font-size: 10px; }
+.cpa-item.pass .cpa-label { color: var(--success); }
+.cpa-item.fail .cpa-label { color: var(--danger); }
+
+/* ===== Canvas Toolbar ===== */
+.canvas-toolbar {
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.tool-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s;
+}
+.tool-btn:hover { color: var(--text); background: var(--bg-hover); border-color: var(--border); }
+.tool-btn.active { color: var(--accent); background: rgba(16,185,129,0.1); border-color: var(--accent); }
+.tool-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+
+/* ===== Canvas ===== */
+.canvas-container { flex: 1; position: relative; overflow: hidden; background: #F1F5F9; }
+.canvas-container canvas { display: block; width: 100%; height: 100%; }
+.canvas-info {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  display: flex;
+  gap: 12px;
+  font-size: 10px;
+  color: var(--text-dim);
+  font-family: monospace;
+  background: rgba(255,255,255,0.92);
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+.canvas-legend {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(255,255,255,0.95);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 10px;
+}
+.legend-item { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.legend-item:last-child { margin-bottom: 0; }
+.legend-color { width: 12px; height: 8px; border-radius: 2px; }
+
+/* ===== Tooltip ===== */
+.canvas-tooltip {
+  position: absolute;
+  display: none;
+  background: rgba(255,255,255,0.98);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 11px;
+  pointer-events: none;
+  z-index: 50;
+  min-width: 200px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+.canvas-tooltip .tt-title { color: var(--accent); font-weight: 700; margin-bottom: 4px; font-size: 12px; }
+.canvas-tooltip .tt-row { display: flex; justify-content: space-between; padding: 2px 0; }
+.canvas-tooltip .tt-key { color: var(--text-dim); }
+.canvas-tooltip .tt-val { color: var(--text); font-family: monospace; }
+
+/* ===== Right Panel: Property ===== */
+.prop-group { margin-bottom: 12px; }
+.prop-group-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.prop-row {
+  display: flex;
+  padding: 3px 0;
+  font-size: 11px;
+}
+.prop-key { color: var(--text-dim); width: 120px; flex-shrink: 0; }
+.prop-val { color: var(--text); font-family: monospace; word-break: break-all; }
+.prop-val.pass { color: var(--success); }
+.prop-val.fail { color: var(--danger); }
+.prop-val.warn { color: var(--warning); }
+
+/* ===== Links Display ===== */
+.link-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  margin-bottom: 3px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.link-item:hover { border-color: var(--accent); background: var(--bg-hover); }
+.link-type { color: var(--ont-orange); font-weight: 600; font-size: 10px; white-space: nowrap; }
+.link-arrow { color: var(--text-dim); }
+.link-target { color: var(--secondary); font-family: monospace; font-size: 10px; }
+
+/* ===== Action Buttons ===== */
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.15s;
+  margin-bottom: 4px;
+  width: 100%;
+}
+.action-btn:hover { border-color: var(--accent); background: var(--bg-hover); }
+.action-btn .action-icon { font-size: 14px; }
+.action-btn .action-role { margin-left: auto; font-size: 9px; color: var(--text-dim); }
+.action-btn.locked { opacity: 0.4; cursor: not-allowed; }
+
+/* ===== AI Card ===== */
+.ai-card {
+  background: linear-gradient(135deg, rgba(16,185,129,0.08), rgba(14,165,233,0.05));
+  border: 1px solid rgba(16,185,129,0.25);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.ai-card .ai-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 11px; font-weight: 700; color: var(--accent); }
+.ai-card .ai-body { font-size: 11px; color: var(--text); line-height: 1.5; }
+.ai-card .ai-actions { display: flex; gap: 6px; margin-top: 8px; }
+.ai-card .ai-btn {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 10px;
+  cursor: pointer;
+  border: none;
+  font-weight: 600;
+}
+.ai-card .ai-btn.apply { background: var(--accent); color: white; }
+.ai-card .ai-btn.apply:hover { filter: brightness(1.15); }
+.ai-card .ai-btn.dismiss { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+
+/* ===== AI Reasoning Chain ===== */
+.ai-reasoning { margin-top: 8px; padding: 8px 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; }
+.ai-reasoning .ai-chain-title { font-size: 10px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 6px; }
+.ai-reasoning .ai-step { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; font-size: 10px; line-height: 1.5; position: relative; }
+.ai-reasoning .ai-step:not(:last-child) { border-bottom: 1px dashed var(--border); padding-bottom: 5px; }
+.ai-reasoning .ai-step-num { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); color: white; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+.ai-reasoning .ai-step-body { flex: 1; }
+.ai-reasoning .ai-step-rule { color: var(--text-dim); font-size: 9px; font-style: italic; margin-top: 2px; }
+.ai-reasoning .ai-step-arrow { text-align: center; color: var(--accent); font-size: 10px; padding: 1px 0; }
+.ai-reasoning .ai-conclusion { margin-top: 6px; padding: 5px 8px; border-radius: 4px; background: rgba(16,185,129,0.08); border-left: 3px solid var(--accent); font-size: 10px; font-weight: 600; color: var(--text); }
+.ai-reasoning .ai-principle-tag { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; margin-right: 4px; }
+.ai-reasoning .ai-principle-tag.geometry { background: rgba(14,165,233,0.1); color: var(--secondary); }
+.ai-reasoning .ai-principle-tag.naming { background: rgba(16,185,129,0.1); color: var(--accent); }
+.ai-reasoning .ai-principle-tag.spatial { background: rgba(168,85,247,0.1); color: #A855F7; }
+.ai-reasoning .ai-principle-tag.authority { background: rgba(245,158,11,0.1); color: #F59E0B; }
+.ai-reasoning .ai-principle-tag.ontology { background: rgba(239,68,68,0.1); color: #EF4444; }
+
+/* ===== Audit Log ===== */
+.audit-entry {
+  padding: 6px 8px;
+  border-left: 2px solid var(--border);
+  margin-bottom: 4px;
+  font-size: 10px;
+}
+.audit-entry .audit-time { color: var(--text-dim); font-family: monospace; }
+.audit-entry .audit-event { color: var(--accent); font-weight: 600; }
+.audit-entry .audit-actor { color: var(--secondary); }
+.audit-entry.action { border-left-color: var(--accent); }
+.audit-entry.system { border-left-color: var(--warning); }
+.audit-entry.ai { border-left-color: var(--ont-purple); }
+
+/* ===== Status Bar ===== */
+.status-bar {
+  background: var(--primary);
+  height: 28px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 16px;
+  font-size: 10px;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.status-item { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; }
+.status-dot.green { background: var(--success); }
+.status-dot.red { background: var(--danger); }
+.status-dot.orange { background: var(--warning); }
+.status-dot.blue { background: var(--secondary); }
+.status-bar .progress-mini { width: 80px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.status-bar .progress-mini .fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.5s; }
+
+/* ===== Modal ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(100,116,139,0.3);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  backdrop-filter: blur(4px);
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 500px;
+  max-width: 700px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(100,116,139,0.15);
+}
+.modal h3 { color: var(--accent); margin-bottom: 16px; font-size: 16px; }
+.modal .modal-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.modal .modal-row:last-child { border-bottom: none; }
+.modal .modal-label { color: var(--text-dim); width: 140px; font-size: 12px; }
+.modal .modal-value { color: var(--text); font-family: monospace; font-size: 12px; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.modal-btn { padding: 8px 20px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 12px; font-weight: 600; }
+.modal-btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
+.modal-btn.primary:hover { filter: brightness(1.15); }
+.modal-btn.danger { background: var(--danger); color: white; border-color: var(--danger); }
+
+/* ===== Toast ===== */
+.toast-container {
+  position: fixed;
+  top: 60px;
+  right: 20px;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.toast {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  min-width: 320px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  box-shadow: 0 8px 32px rgba(100,116,139,0.12);
+  animation: slideIn 0.3s ease;
+}
+.toast.success { border-left: 3px solid var(--success); }
+.toast.error { border-left: 3px solid var(--danger); }
+.toast.warning { border-left: 3px solid var(--warning); }
+.toast.info { border-left: 3px solid var(--secondary); }
+.toast .toast-icon { font-size: 16px; flex-shrink: 0; }
+.toast .toast-body { flex: 1; }
+.toast .toast-title { font-weight: 700; font-size: 12px; margin-bottom: 2px; }
+.toast .toast-msg { font-size: 11px; color: var(--text-dim); }
+@keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+/* ===== Parse Progress Overlay ===== */
+.parse-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(241,245,249,0.95);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  flex-direction: column;
+  gap: 16px;
+}
+.parse-overlay.show { display: flex; }
+.parse-progress { width: 400px; }
+.parse-progress .progress-bar { width: 100%; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
+.parse-progress .progress-bar .fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--secondary)); border-radius: 3px; transition: width 0.3s; }
+.parse-progress .progress-text { text-align: center; font-size: 12px; color: var(--text-dim); }
+.parse-progress .progress-title { text-align: center; font-size: 14px; color: var(--accent); font-weight: 700; margin-bottom: 12px; }
+.parse-steps { width: 400px; }
+.parse-step { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 11px; }
+.parse-step .step-icon { font-size: 14px; width: 18px; text-align: center; }
+.parse-step .step-text { flex: 1; }
+.parse-step.done .step-text { color: var(--success); }
+.parse-step.active .step-text { color: var(--accent); }
+.parse-step.pending .step-text { color: var(--text-dim); }
+
+/* ===== Diff Badge ===== */
+.diff-add { background: rgba(76,175,80,0.15); color: var(--success); padding: 1px 4px; border-radius: 2px; font-size: 9px; }
+.diff-mod { background: rgba(255,152,0,0.15); color: var(--warning); padding: 1px 4px; border-radius: 2px; font-size: 9px; }
+.diff-del { background: rgba(244,67,54,0.15); color: var(--danger); padding: 1px 4px; border-radius: 2px; font-size: 9px; }
+
+/* ===== Responsive helpers ===== */
+.scroll-y { overflow-y: auto; flex: 1; }
+.gap-4 { gap: 4px; }
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.mt-8 { margin-top: 8px; }
+.mb-8 { margin-bottom: 8px; }
+.text-accent { color: var(--accent); }
+.text-dim { color: var(--text-dim); }
+.text-success { color: var(--success); }
+.text-danger { color: var(--danger); }
+.text-warning { color: var(--warning); }
+.font-mono { font-family: monospace; }
+.text-xs { font-size: 10px; }
+.text-sm { font-size: 11px; }
+.fw-700 { font-weight: 700; }
+
+/* ===== Pulse animation for active elements ===== */
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+.pulse { animation: pulse 2s ease-in-out infinite; }
+
+/* ===== Role indicator & dropdown ===== */
+.role-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(14,165,233,0.12);
+  color: var(--secondary);
+  border: 1px solid rgba(14,165,233,0.25);
+  cursor: pointer; position: relative; user-select: none;
+}
+.role-indicator:hover { border-color: var(--accent); }
+.role-dropdown { position: absolute; top: 100%; right: 0; margin-top: 6px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; padding: 6px 0; min-width: 280px; box-shadow: 0 12px 40px rgba(100,116,139,0.12); z-index: 300; display: none; }
+.role-dropdown.show { display: block; }
+.role-dropdown .rd-header { padding: 6px 12px; font-size: 9px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.role-option { display: flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer; transition: background 0.15s; font-size: 11px; }
+.role-option:hover { background: var(--bg-hover); }
+.role-option.active { background: rgba(16,185,129,0.1); color: var(--accent); }
+.role-option .ro-name { font-weight: 600; }
+.role-option .ro-dept { font-size: 9px; color: var(--text-dim); margin-left: auto; }
+.role-option .ro-risk { font-size: 8px; padding: 1px 4px; border-radius: 3px; font-weight: 700; }
+.role-option .ro-risk.CRITICAL { background: rgba(244,67,54,0.15); color: var(--danger); }
+.role-option .ro-risk.HIGH { background: rgba(255,152,0,0.15); color: var(--warning); }
+.role-option .ro-risk.MEDIUM { background: rgba(14,165,233,0.15); color: var(--secondary); }
+.role-option .ro-risk.LOW { background: rgba(76,175,80,0.15); color: var(--success); }
+.perm-denied { opacity: 0.35 !important; pointer-events: none !important; cursor: not-allowed !important; }
+.perm-denied-overlay { position: relative; }
+.perm-denied-overlay::after { content: '无权限'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(241,245,249,0.88); font-size: 10px; color: var(--danger); font-weight: 700; border-radius: 5px; }
+</style>
+</head>
+<body>
+
+<!-- ===== TOP NAVIGATION ===== -->
+<nav class="topnav">
+  <div class="logo">
+    <div class="logo-icon">P</div>
+    ProLine CAD
+  </div>
+  <div class="nav-sep"></div>
+  <div class="nav-tabs">
+    <div class="nav-tab active"><span class="dot blue"></span> S1 底图解析</div>
+    <div class="nav-tab"><span class="dot orange"></span> S2 工艺约束</div>
+    <div class="nav-tab"><span class="dot green"></span> S3 布局优化</div>
+    <div class="nav-tab"><span class="dot purple"></span> S4 仿真验证</div>
+    <div class="nav-tab"><span class="dot red"></span> S5 决策工作台</div>
+  </div>
+  <div class="nav-sep"></div>
+  <div class="nav-right">
+    <span class="mcp-badge">MCP ctx-uuid-001</span>
+    <span class="version-badge">v1.3.0</span>
+    <button class="nav-btn outline" onclick="showVersionDiff()">Diff 视图</button>
+    <button class="nav-btn" onclick="startParse()" id="btnParse">解析底图</button>
+    <button class="nav-btn outline" onclick="exportUSD()">导出 OpenUSD</button>
+    <button class="nav-btn success disabled" id="btnCPA" onclick="showCPAModal()">签发 CP-A Token</button>
+    <div class="nav-sep"></div>
+    <div class="role-indicator" id="roleIndicator" onclick="toggleRoleDropdown(event)">
+      <span id="roleLabel">产线规划设计师</span> ▾
+      <div class="role-dropdown" id="roleDropdown"></div>
+    </div>
+  </div>
+</nav>
+
+<!-- ===== OBJECT CONTEXT HEADER ===== -->
+<div class="obj-context">
+  <span class="obj-type">[ONT] SiteModel</span>
+  <span class="obj-id">[SM-001]</span>
+  <span class="obj-state draft" id="smState">DRAFT</span>
+  <span class="text-xs text-dim">v1.3.0 · C919总装线03厂房</span>
+  <span class="text-xs text-dim">hash: sha256:abc123...def456</span>
+  <div style="margin-left: auto;" class="obj-chain">
+    <span>下游影响：</span>
+    <span class="chain-node">CS-001</span>
+    <span class="chain-arrow">→</span>
+    <span class="chain-node">LC-007</span>
+    <span class="chain-arrow">→</span>
+    <span class="chain-node">SIM-007</span>
+    <span class="chain-arrow">→</span>
+    <span class="chain-node">DEC-001</span>
+  </div>
+</div>
+
+<!-- ===== MAIN BODY ===== -->
+<div class="app-body">
+  <!-- ===== LEFT PANEL ===== -->
+  <div class="panel-left">
+    <div class="scroll-y">
+      <!-- File Upload Section -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">
+          <span class="icon">▼</span> 文件管理
+        </div>
+        <div class="section-body">
+          <div class="upload-zone" id="uploadZone" onclick="triggerUpload()">
+            <div class="upload-icon"></div>
+            <div class="upload-text">拖拽文件到此处，或点击上传</div>
+            <div class="upload-formats">DWG · IFC · RVT · LAS · E57 · 设备清单XLSX</div>
+          </div>
+          <div id="fileList">
+            <div class="file-item" onclick="selectFile('dwg')">
+              <span class="file-icon"></span>
+              <span class="file-name">C919_FAL_03厂房.dwg</span>
+              <span class="file-size">5.4MB</span>
+              <span class="file-status">OK</span>
+            </div>
+            <div class="file-item" onclick="selectFile('gcp')">
+              <span class="file-icon"></span>
+              <span class="file-name">GCP_控制点.csv</span>
+              <span class="file-size">12KB</span>
+              <span class="file-status">OK</span>
+            </div>
+            <div class="file-item" onclick="selectFile('xlsx')">
+              <span class="file-icon"></span>
+              <span class="file-name">设备清单_MBOM_v3.2.xlsx</span>
+              <span class="file-size">245KB</span>
+              <span class="file-status">OK</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layer Tree Section -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">
+          <span class="icon">▼</span> 图层树
+          <span class="count" id="layerTotalCount">487</span>
+        </div>
+        <div class="section-body" id="layerTree">
+          <!-- Recognized layers -->
+          <div class="layer-group">
+            <div class="layer-group-header" onclick="toggleLayerGroup(this)">
+              <span class="arrow open">▶</span>
+              <span class="group-icon">OK</span>
+              <span>已识别图层</span>
+              <span class="group-count" id="recogCount">480</span>
+            </div>
+            <div class="layer-group-body" id="recognizedLayers"></div>
+          </div>
+          <!-- Unrecognized layers -->
+          <div class="layer-group">
+            <div class="layer-group-header" onclick="toggleLayerGroup(this)">
+              <span class="arrow open">▶</span>
+              <span class="group-icon"></span>
+              <span style="color:var(--danger)">未识别图层</span>
+              <span class="group-count" style="color:var(--danger)" id="unrecogCount">7</span>
+            </div>
+            <div class="layer-group-body" id="unrecognizedLayers"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CP-A Preconditions Section -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">
+          <span class="icon">▼</span> CP-A 前置条件
+          <span class="count" id="cpaProgress">5/7</span>
+        </div>
+        <div class="section-body" id="cpaChecklist"></div>
+      </div>
+
+      <!-- Ontology Stats -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">
+          <span class="icon">▼</span> Ontology 统计
+        </div>
+        <div class="section-body">
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:4px;">
+            <div class="prop-row"><span class="prop-key">Asset</span><span class="prop-val">24</span></div>
+            <div class="prop-row"><span class="prop-key">Station</span><span class="prop-val">8</span></div>
+            <div class="prop-row"><span class="prop-key">GroundPit</span><span class="prop-val">3</span></div>
+            <div class="prop-row"><span class="prop-key">CraneRunway</span><span class="prop-val">2</span></div>
+            <div class="prop-row"><span class="prop-key">RestrictedZone</span><span class="prop-val">5</span></div>
+            <div class="prop-row"><span class="prop-key">Foundation</span><span class="prop-val">4</span></div>
+            <div class="prop-row"><span class="prop-key">TrustToken</span><span class="prop-val">0</span></div>
+            <div class="prop-row"><span class="prop-key">AuditLog</span><span class="prop-val" id="auditCount">47</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CENTER PANEL ===== -->
+  <div class="panel-center">
+    <!-- Canvas Toolbar -->
+    <div class="canvas-toolbar">
+      <button class="tool-btn active" data-tool="select" onclick="setTool('select',this)">选择</button>
+      <button class="tool-btn" data-tool="pan" onclick="setTool('pan',this)">拖拽</button>
+      <button class="tool-btn" data-tool="measure" onclick="setTool('measure',this)">测距</button>
+      <div class="tool-sep"></div>
+      <button class="tool-btn" data-tool="collision" onclick="setTool('collision',this)">碰撞检测</button>
+      <button class="tool-btn" data-tool="crane" onclick="toggleCraneLayer(this)">吊运层</button>
+      <div class="tool-sep"></div>
+      <span class="text-xs text-dim" id="canvasStatus">就绪 · 487 图层 · 24 工装 · 8 站位</span>
+      <div style="margin-left:auto; display:flex; gap:6px; align-items:center;">
+        <span class="text-xs text-dim" id="coordDisplay">X: — Y: —</span>
+        <span class="text-xs text-dim" id="zoomDisplay">100%</span>
+      </div>
+    </div>
+    <!-- Canvas -->
+    <div class="canvas-container" id="canvasContainer">
+      <canvas id="mainCanvas"></canvas>
+      <!-- Tooltip -->
+      <div class="canvas-tooltip" id="canvasTooltip"></div>
+      <!-- Legend -->
+      <div class="canvas-legend">
+        <div class="legend-item"><div class="legend-color" style="background:var(--pit-color)"></div> 地沟/地坑</div>
+        <div class="legend-item"><div class="legend-color" style="background:var(--crane-color)"></div> 吊车梁轨道</div>
+        <div class="legend-item"><div class="legend-color" style="background:#CA8A04"></div> 型架基础</div>
+        <div class="legend-item"><div class="legend-color" style="background:var(--danger);opacity:0.5"></div> 禁区/防爆区</div>
+        <div class="legend-item"><div class="legend-color" style="background:var(--asset-color)"></div> 工装/设备</div>
+        <div class="legend-item"><div class="legend-color" style="background:var(--station-color)"></div> 装配站位</div>
+        <div class="legend-item"><div class="legend-color" style="background:#607D8B"></div> 厂房结构</div>
+      </div>
+      <!-- Canvas Info -->
+      <div class="canvas-info">
+        <span>坐标系: GCP-001 基准</span>
+        <span>精度: 一般≤1mm / 关键≤0.1mm</span>
+        <span>单位: mm</span>
+        <span id="parseTimeInfo">解析耗时: 387s</span>
+      </div>
+      <!-- Parse Overlay -->
+      <div class="parse-overlay" id="parseOverlay">
+        <div class="parse-progress">
+          <div class="progress-title" id="parseTitle">正在解析底图...</div>
+          <div class="progress-bar"><div class="fill" id="parseFill" style="width:0%"></div></div>
+          <div class="progress-text" id="parsePercent">0%</div>
+        </div>
+        <div class="parse-steps" id="parseSteps"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== RIGHT PANEL ===== -->
+  <div class="panel-right">
+    <div class="scroll-y" style="padding:12px">
+      <!-- Selected Object -->
+      <div id="propPanel">
+        <div class="prop-group">
+          <div class="prop-group-title">[ONT] 选中对象</div>
+          <div id="selectedObjProps">
+            <div style="text-align:center; padding:20px; color:var(--text-dim); font-size:11px;">
+              点击画布中的元素查看属性
+            </div>
+          </div>
+        </div>
+
+        <!-- Links -->
+        <div class="prop-group" id="linksGroup" style="display:none">
+          <div class="prop-group-title">Links（关系）</div>
+          <div id="linksPanel"></div>
+        </div>
+
+        <!-- Actions -->
+        <div class="prop-group" id="actionsGroup" style="display:none">
+          <div class="prop-group-title">Actions</div>
+          <div id="actionsPanel"></div>
+        </div>
+      </div>
+
+      <hr style="border-color:var(--border); margin:12px 0">
+
+      <!-- AI Suggestion -->
+      <div class="ai-card" id="aiCard">
+        <div class="ai-header">AI 建议 <span style="margin-left:auto;font-size:9px;color:var(--text-dim);font-weight:400">model: AeroSemantic-v2 · latency: 340ms</span></div>
+        <div class="ai-body" id="aiBody">
+          检测到 <strong>LAYER-423</strong> 语义匹配置信度：<strong>0.87</strong><br>
+          建议标注为：<strong style="color:var(--pit-color)">GROUND_PIT（地沟/地坑）</strong>
+          <div class="ai-reasoning">
+            <div class="ai-chain-title">Reasoning Chain (4 steps)</div>
+            <div class="ai-step">
+              <span class="ai-step-num">1</span>
+              <div class="ai-step-body">
+                <span class="ai-principle-tag naming">命名规则</span>
+                图层名 <code>PIT_*</code> 前缀匹配地坑类命名模式 (LAYER_NAMING_RULE §3.2)
+                <div class="ai-step-rule">Based: 航空厂房图层命名标准 · 匹配权重 +0.20</div>
+              </div>
+            </div>
+            <div class="ai-step">
+              <span class="ai-step-num">2</span>
+              <div class="ai-step-body">
+                <span class="ai-principle-tag geometry">几何特征</span>
+                包含矩形封闭多段线 (4-vertex closed polyline) + 深度标注文字 <code>depth=1200mm</code>
+                <div class="ai-step-rule">Based: GROUND_PIT 几何签名 — 封闭矩形+深度标注 为必要特征 (PRD-1 §2.4) · 匹配权重 +0.35</div>
+              </div>
+            </div>
+            <div class="ai-step">
+              <span class="ai-step-num">3</span>
+              <div class="ai-step-body">
+                <span class="ai-principle-tag spatial">空间上下文</span>
+                位于 STATION-02 与 STATION-03 通道交汇区域，深度 1200mm 符合典型地坑 800~2500mm 范围
+                <div class="ai-step-rule">Based: AeroOntology 空间拓扑推理 — 地坑通常位于站位间通道或型架基础旁 · 匹配权重 +0.22</div>
+              </div>
+            </div>
+            <div class="ai-step">
+              <span class="ai-step-num">4</span>
+              <div class="ai-step-body">
+                <span class="ai-principle-tag ontology">约束推断</span>
+                若确认为 GROUND_PIT → 自动附加 <code>TRAVERSE_PROHIBITED</code> 约束（最高优先级，不可覆盖）
+                <div class="ai-step-rule">Based: PRD-1 业务规则 §2 — 地坑识别即触发禁行约束 · 需甲方确认后生效</div>
+              </div>
+            </div>
+            <div class="ai-conclusion">
+              conf = 0.20 + 0.35 + 0.22 + 0.10(prior) = <strong>0.87</strong> · 阈值 0.80 → 可建议，需人工确认
+            </div>
+          </div>
+        </div>
+        <div class="ai-actions">
+          <button class="ai-btn apply" onclick="applyAISuggestion()">采纳建议</button>
+          <button class="ai-btn dismiss" onclick="dismissAI()">忽略</button>
+          <button class="ai-btn dismiss" onclick="askAI()">追问</button>
+        </div>
+      </div>
+
+      <hr style="border-color:var(--border); margin:12px 0">
+
+      <!-- Trust Token Panel -->
+      <div class="prop-group">
+        <div class="prop-group-title">Trust Token CP-A</div>
+        <div id="trustTokenPanel">
+          <div class="prop-row"><span class="prop-key">状态</span><span class="prop-val warn" id="tokenStatus">未签发</span></div>
+          <div class="prop-row"><span class="prop-key">前置条件</span><span class="prop-val" id="tokenPrereq">5/7 通过</span></div>
+          <div class="prop-row"><span class="prop-key">阻断项</span><span class="prop-val fail" id="tokenBlocked">SM001, SM005</span></div>
+          <div class="prop-row"><span class="prop-key">签发权限</span><span class="prop-val text-dim">CHECKPOINT_APPROVER · PROJECT_MANAGER</span></div>
+        </div>
+      </div>
+
+      <hr style="border-color:var(--border); margin:12px 0">
+
+      <!-- Recent Audit Log -->
+      <div class="prop-group">
+        <div class="prop-group-title">审计日志（最近）</div>
+        <div id="auditLog">
+          <div class="audit-entry action">
+            <div class="audit-time">14:30:00</div>
+            <div class="audit-event">SITEMODEL_PARSE_COMPLETED</div>
+            <div class="text-xs text-dim">SM-001 v1.3.0 · 487层 · 387s</div>
+          </div>
+          <div class="audit-entry system">
+            <div class="audit-time">14:29:13</div>
+            <div class="audit-event">PRECISION_AUDIT_PASSED</div>
+            <div class="text-xs text-dim">一般: 0.72mm · 关键: 0.08mm </div>
+          </div>
+          <div class="audit-entry action">
+            <div class="audit-time">14:28:45</div>
+            <div class="audit-event">ASSET_BATCH_REGISTERED</div>
+            <div class="text-xs text-dim">24 Assets · MDI匹配率: 95.8%</div>
+          </div>
+          <div class="audit-entry ai">
+            <div class="audit-time">14:25:10</div>
+            <div class="audit-event">LLM_LAYER_SUGGESTION</div>
+            <div class="text-xs text-dim">LAYER-423 → GROUND_PIT (conf: 0.87)</div>
+          </div>
+          <div class="audit-entry system">
+            <div class="audit-time">14:20:00</div>
+            <div class="audit-event">ONTOLOGY_OBJECTS_CREATED</div>
+            <div class="text-xs text-dim">38 objects registered in AeroOntology</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== STATUS BAR ===== -->
+<div class="status-bar">
+  <div class="status-item">
+    <span class="status-dot green"></span>
+    <span>解析完成</span>
+    <div class="progress-mini"><div class="fill" style="width:100%"></div></div>
+  </div>
+  <div class="status-item">
+    <span class="status-dot green"></span>
+    精度验证: 一般0.72mm · 关键0.08mm
+  </div>
+  <div class="status-item">
+    <span class="status-dot red" id="unrecogDot"></span>
+    <span id="unrecogStatus">未识别图层: 7</span>
+  </div>
+  <div class="status-item">
+    <span class="status-dot green"></span>
+    MDI匹配率: 95.8%
+  </div>
+  <div class="status-item" style="margin-left:auto;">
+    <span class="status-dot blue"></span>
+    MCP: ctx-uuid-001
+  </div>
+  <div class="status-item">
+    PROJ-2024-007
+  </div>
+</div>
+
+<!-- ===== TOAST CONTAINER ===== -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ===== CP-A MODAL ===== -->
+<div class="modal-overlay" id="cpaModal">
+  <div class="modal">
+    <h3>签发 CP-A Trust Token</h3>
+    <div class="modal-row">
+      <span class="modal-label">SiteModel</span>
+      <span class="modal-value">SM-001 · v1.3.0</span>
+    </div>
+    <div class="modal-row">
+      <span class="modal-label">Hash</span>
+      <span class="modal-value">sha256:abc123def456</span>
+    </div>
+    <div class="modal-row">
+      <span class="modal-label">项目</span>
+      <span class="modal-value">PROJ-2024-007 · C919总装线03厂房</span>
+    </div>
+    <div id="cpaModalChecks" style="margin-top:12px;"></div>
+    <div style="margin-top:12px;">
+      <label style="font-size:12px; color:var(--text-dim);">审批意见：</label>
+      <textarea id="cpaComment" style="width:100%; margin-top:4px; padding:8px; background:var(--bg-card); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px; resize:vertical; min-height:60px;" placeholder="已现场核实地坑及禁区，同意进入布局阶段"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn" onclick="closeCPAModal()">取消</button>
+      <button class="modal-btn primary" id="cpaIssueBtn" onclick="issueCPAToken()">签发 Token</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== CONSTRAINT CONFIG MODAL ===== -->
+<div class="modal-overlay" id="constraintModal">
+  <div class="modal">
+    <h3 id="constraintTitle">约束配置</h3>
+    <div id="constraintBody"></div>
+    <div class="modal-footer">
+      <button class="modal-btn" onclick="closeConstraintModal()">关闭</button>
+      <button class="modal-btn primary" onclick="confirmConstraint()">确认 · 写入 Ontology</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// =====================================================
+// MOCK DATA — Aligned with PRD-1 & Demo Data Spec
+// =====================================================
+const SITE_MODEL = {
+  site_guid: "SM-001",
+  ontology_version: "AeroOntology-v1.0",
+  version: "v1.3.0",
+  lifecycle_state: "DRAFT",
+  project: "PROJ-2024-007",
+  name: "C919总装线03厂房",
+  base_file_hash: "sha256:abc123def456",
+  boundary: { width: 120000, height: 60000, area_sqm: 28000 }, // mm
+  coordinate_system: { origin: [0,0,0], unit: "mm", reference: "GCP-001", precision_general: 0.72, precision_critical: 0.08 },
+  summary: {
+    total_layers: 487, recognized_layers: 480, unrecognized_layers: 7,
+    assets_registered: 24, assets_matched_mdid: 23, mdid_match_rate: 0.958,
+    ground_pits_found: 3, crane_runways_found: 2, restricted_zones_found: 5,
+    processing_time_sec: 387
+  }
+};
+
+const CP_A = {
+  SM001: { label: "图层全部识别或标注", desc: "unrecognized_layers == 0", pass: false },
+  SM002: { label: "MDI 匹配率 ≥ 95%", desc: "mdid_match_rate ≥ 0.95", pass: true },
+  SM003: { label: "一般区域精度 ≤ 1mm", desc: "precision_general: 0.72mm", pass: true },
+  SM004: { label: "关键结合面精度 ≤ 0.1mm", desc: "precision_critical: 0.08mm", pass: true },
+  SM005: { label: "地坑甲方书面确认", desc: "client_confirmed == true", pass: false },
+  SM006: { label: "禁区甲方书面确认", desc: "restricted_zone_confirmed", pass: true },
+  SM007: { label: "无 Asset 超出边界", desc: "boundary_violations == 0", pass: true },
+};
+
+const RECOGNIZED_LAYERS = [
+  { name: "STATION-01~08", color: "#9C27B0", semantic: "station_boundary", count: 8 },
+  { name: "JIGS_FOUNDATION", color: "#FFEB3B", semantic: "heavy_fixture_base", count: 4 },
+  { name: "PIT_GROUND_01~03", color: "#2196F3", semantic: "restricted_zone_pit", count: 3 },
+  { name: "CRANE_RUNWAY_A/B", color: "#FF9800", semantic: "overhead_crane_path", count: 2 },
+  { name: "EXPLOSION_PROOF_*", color: "#F44336", semantic: "safety_restricted", count: 5 },
+  { name: "AGV_PATH", color: "#00BCD4", semantic: "logistics_path", count: 12 },
+  { name: "WALL_STRUCTURE", color: "#607D8B", semantic: "building_envelope", count: 45 },
+  { name: "COLUMN_GRID", color: "#78909C", semantic: "structural_grid", count: 128 },
+  { name: "CABLE_TRAY_*", color: "#795548", semantic: "utility_overhead", count: 34 },
+  { name: "UTILITY_AIR_*", color: "#009688", semantic: "supply_point", count: 18 },
+  { name: "MAINTENANCE_AISLE", color: "#8BC34A", semantic: "clearance_zone", count: 22 },
+  { name: "LOAD_LIMIT_ZONE", color: "#FF5722", semantic: "load_restricted", count: 8 },
+  { name: "其他已识别图层", color: "#90A4AE", semantic: "misc", count: 191 },
+];
+
+const UNRECOGNIZED_LAYERS = [
+  { name: "LAYER-047", hint: "可能为临时标注层" },
+  { name: "LAYER-203", hint: "可能为旧版辅助线" },
+  { name: "LAYER-318", hint: "含封闭多段线" },
+  { name: "LAYER-401", hint: "可能为设备编号标注" },
+  { name: "LAYER-422", hint: "可能为管线预留" },
+  { name: "LAYER-423", hint: "AI建议: GROUND_PIT (conf:0.87)" },
+  { name: "LAYER-489", hint: "可能为临时施工标注" },
+];
+
+// Factory floor objects in canvas coordinates (proportional to boundary)
+const GROUND_PITS = [
+  { id: "PIT-001", ontology_id: "uuid-pit-001", type: "GROUND_PIT", x: 15, y: 20, w: 8, h: 4, depth: 1500, constraint: "TRAVERSE_PROHIBITED", confirmed: false },
+  { id: "PIT-002", ontology_id: "uuid-pit-002", type: "GROUND_SLOT", x: 50, y: 35, w: 12, h: 3, depth: 2000, constraint: "TRAVERSE_PROHIBITED", confirmed: true },
+  { id: "PIT-003", ontology_id: "uuid-pit-003", type: "UTILITY_TRENCH", x: 80, y: 15, w: 6, h: 5, depth: 1200, constraint: "TRAVERSE_PROHIBITED", confirmed: false },
+];
+
+const CRANE_RUNWAYS = [
+  { id: "CRANE-A", ontology_id: "uuid-crane-a", y: 12, x1: 5, x2: 95, span: 24000, rail_elev: 12000, max_load: 50000 },
+  { id: "CRANE-B", ontology_id: "uuid-crane-b", y: 48, x1: 5, x2: 95, span: 18000, rail_elev: 10000, max_load: 30000 },
+];
+
+const RESTRICTED_ZONES = [
+  { id: "RZ-001", type: "EXPLOSION_PROOF", x: 70, y: 5, w: 20, h: 15, confirmed: true },
+  { id: "RZ-002", type: "CLEANROOM", x: 5, y: 40, w: 15, h: 18, confirmed: true },
+  { id: "RZ-003", type: "NOISE_ZONE", x: 35, y: 50, w: 10, h: 8, confirmed: false },
+  { id: "RZ-004", type: "SAFETY_BUFFER", x: 60, y: 45, w: 12, h: 10, confirmed: true },
+  { id: "RZ-005", type: "CLEANROOM", x: 88, y: 35, w: 10, h: 15, confirmed: true },
+];
+
+const FOUNDATIONS = [
+  { id: "FOUND-001", x: 20, y: 25, w: 5, h: 3, compatible: ["MDI-2024-007","MDI-2024-008"] },
+  { id: "FOUND-002", x: 42, y: 18, w: 4, h: 4, compatible: ["MDI-2024-003"] },
+  { id: "FOUND-003", x: 65, y: 28, w: 6, h: 3, compatible: ["MDI-2024-010"] },
+  { id: "FOUND-004", x: 85, y: 22, w: 5, h: 4, compatible: ["MDI-2024-015"] },
+];
+
+const STATIONS = [
+  { id: "S01", label: "STATION-01", x: 8, y: 15, w: 18, h: 14 },
+  { id: "S02", label: "STATION-02", x: 28, y: 15, w: 18, h: 14 },
+  { id: "S03", label: "STATION-03", x: 48, y: 15, w: 18, h: 14 },
+  { id: "S04", label: "STATION-04", x: 68, y: 15, w: 18, h: 14 },
+  { id: "S05", label: "STATION-05", x: 8, y: 35, w: 18, h: 14 },
+  { id: "S06", label: "STATION-06", x: 28, y: 35, w: 18, h: 14 },
+  { id: "S07", label: "STATION-07", x: 48, y: 35, w: 18, h: 14 },
+  { id: "S08", label: "STATION-08", x: 68, y: 35, w: 18, h: 14 },
+];
+
+const ASSETS = [
+  { id: "MDI-2024-001", label: "主装配型架-01", station: "S01", x: 14, y: 20, w: 4, h: 2.5, weight: 12000, movement: "CRANE_ONLY", category: "MAIN_JIGS", crane: "CRANE-A" },
+  { id: "MDI-2024-002", label: "蒙皮对接型架", station: "S01", x: 10, y: 24, w: 3.5, h: 2, weight: 8500, movement: "CRANE_ONLY", category: "MAIN_JIGS", crane: "CRANE-A" },
+  { id: "MDI-2024-003", label: "翼根对接工装", station: "S02", x: 33, y: 19, w: 5, h: 2, weight: 15000, movement: "CRANE_ONLY", category: "WING_JIGS", crane: "CRANE-A" },
+  { id: "MDI-2024-004", label: "尾段对接型架", station: "S02", x: 30, y: 24, w: 4, h: 2, weight: 9000, movement: "CRANE_ONLY", category: "MAIN_JIGS", crane: "CRANE-A" },
+  { id: "MDI-2024-005", label: "机身水平连接器", station: "S03", x: 54, y: 20, w: 3, h: 3, weight: 6200, movement: "RAIL", category: "CONNECTOR" },
+  { id: "MDI-2024-006", label: "垂尾安装架", station: "S03", x: 58, y: 25, w: 2.5, h: 2, weight: 4800, movement: "CRANE_ONLY", category: "TAIL_JIGS", crane: "CRANE-A" },
+  { id: "MDI-2024-007", label: "前起落架安装台", station: "S04", x: 72, y: 18, w: 3, h: 3, weight: 7500, movement: "FIXED", category: "LANDING_GEAR" },
+  { id: "MDI-2024-008", label: "主起落架安装台", station: "S04", x: 78, y: 22, w: 4, h: 3, weight: 11000, movement: "CRANE_ONLY", category: "LANDING_GEAR", crane: "CRANE-A" },
+  { id: "MDI-2024-009", label: "液压系统测试台", station: "S05", x: 12, y: 38, w: 3, h: 2.5, weight: 3200, movement: "MANUAL", category: "TEST_BENCH" },
+  { id: "MDI-2024-010", label: "电气线束工装", station: "S05", x: 18, y: 42, w: 2.5, h: 2, weight: 1800, movement: "AGV", category: "HARNESS_JIG" },
+  { id: "MDI-2024-011", label: "燃油系统密封台", station: "S06", x: 33, y: 38, w: 3, h: 2.5, weight: 2800, movement: "MANUAL", category: "TEST_BENCH" },
+  { id: "MDI-2024-012", label: "机翼油箱密封工装", station: "S06", x: 38, y: 42, w: 4, h: 2, weight: 5500, movement: "CRANE_ONLY", category: "FUEL_JIGS", crane: "CRANE-B" },
+  { id: "MDI-2024-013", label: "整机功能测试架", station: "S07", x: 52, y: 38, w: 5, h: 3, weight: 8000, movement: "FIXED", category: "TEST_BENCH" },
+  { id: "MDI-2024-014", label: "航电集成工装", station: "S07", x: 59, y: 43, w: 3, h: 2, weight: 2200, movement: "MANUAL", category: "AVIONICS" },
+  { id: "MDI-2024-015", label: "总装完检搭架", station: "S08", x: 73, y: 38, w: 4, h: 3, weight: 6800, movement: "CRANE_ONLY", category: "FINAL_ASSY", crane: "CRANE-B" },
+  { id: "MDI-2024-016", label: "喷漆遮蔽工装", station: "S08", x: 79, y: 43, w: 3, h: 2, weight: 1500, movement: "MANUAL", category: "PAINT_JIGS" },
+  // Some more scattered assets
+  { id: "MDI-2024-017", label: "AGV搬运车-01", station: null, x: 25, y: 32, w: 2, h: 1.5, weight: 800, movement: "AGV", category: "AGV" },
+  { id: "MDI-2024-018", label: "AGV搬运车-02", station: null, x: 45, y: 32, w: 2, h: 1.5, weight: 800, movement: "AGV", category: "AGV" },
+  { id: "MDI-2024-019", label: "移动工具车-01", station: null, x: 62, y: 32, w: 1.5, h: 1, weight: 300, movement: "MANUAL", category: "TOOL_CART" },
+  { id: "MDI-2024-020", label: "激光跟踪仪", station: null, x: 40, y: 10, w: 1.5, h: 1.5, weight: 45, movement: "MANUAL", category: "METROLOGY" },
+  { id: "MDI-2024-021", label: "数控钻铆机", station: "S03", x: 51, y: 26, w: 3, h: 2, weight: 9500, movement: "RAIL", category: "CNC" },
+  { id: "MDI-2024-022", label: "自动制孔设备", station: "S04", x: 75, y: 26, w: 2.5, h: 2, weight: 7200, movement: "RAIL", category: "CNC" },
+  { id: "MDI-2024-023", label: "密封剂涂覆机器人", station: "S06", x: 35, y: 46, w: 2, h: 2, weight: 3500, movement: "FIXED", category: "ROBOT" },
+  { id: "MDI-2024-024", label: "力矩扳手校准架", station: "S08", x: 82, y: 38, w: 1.5, h: 1.5, weight: 150, movement: "MANUAL", category: "CALIBRATION" },
+];
+
+// =====================================================
+// CANVAS RENDERING
+// =====================================================
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d');
+let canvasW, canvasH, scaleX, scaleY, offsetX = 0, offsetY = 0, zoom = 1;
+let hoveredObj = null, selectedObj = null, currentTool = 'select';
+let showCraneLayer = true;
+let dragObj = null, dragStartX = 0, dragStartY = 0, dragObjStartX = 0, dragObjStartY = 0;
+
+function resizeCanvas() {
+  const container = document.getElementById('canvasContainer');
+  const rect = container.getBoundingClientRect();
+  canvas.width = rect.width * window.devicePixelRatio;
+  canvas.height = rect.height * window.devicePixelRatio;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+  canvasW = rect.width;
+  canvasH = rect.height;
+  // Scale: map 0-100 to canvas with margin
+  const margin = 40;
+  scaleX = (canvasW - margin * 2) / 100;
+  scaleY = (canvasH - margin * 2) / 60;
+  offsetX = margin;
+  offsetY = margin;
+  render();
+}
+
+function toCanvasX(x) { return offsetX + x * scaleX * zoom; }
+function toCanvasY(y) { return offsetY + y * scaleY * zoom; }
+function toCanvasW(w) { return w * scaleX * zoom; }
+function toCanvasH(h) { return h * scaleY * zoom; }
+function fromCanvasX(cx) { return (cx - offsetX) / (scaleX * zoom); }
+function fromCanvasY(cy) { return (cy - offsetY) / (scaleY * zoom); }
+
+function render() {
+  ctx.clearRect(0, 0, canvasW, canvasH);
+
+  // Background grid
+  ctx.strokeStyle = 'rgba(100,116,139,0.12)';
+  ctx.lineWidth = 0.5;
+  for (let x = 0; x <= 100; x += 5) {
+    ctx.beginPath();
+    ctx.moveTo(toCanvasX(x), toCanvasY(0));
+    ctx.lineTo(toCanvasX(x), toCanvasY(60));
+    ctx.stroke();
+  }
+  for (let y = 0; y <= 60; y += 5) {
+    ctx.beginPath();
+    ctx.moveTo(toCanvasX(0), toCanvasY(y));
+    ctx.lineTo(toCanvasX(100), toCanvasY(y));
+    ctx.stroke();
+  }
+
+  // Factory boundary
+  ctx.strokeStyle = '#455A64';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([]);
+  ctx.strokeRect(toCanvasX(2), toCanvasY(2), toCanvasW(96), toCanvasH(56));
+  ctx.fillStyle = 'rgba(69,90,100,0.05)';
+  ctx.fillRect(toCanvasX(2), toCanvasY(2), toCanvasW(96), toCanvasH(56));
+
+  // Column grid (tiny dots)
+  ctx.fillStyle = 'rgba(120,144,156,0.45)';
+  for (let x = 5; x <= 95; x += 10) {
+    for (let y = 5; y <= 55; y += 10) {
+      ctx.beginPath();
+      ctx.arc(toCanvasX(x), toCanvasY(y), 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Stations (dashed purple boundaries)
+  STATIONS.forEach(s => {
+    ctx.strokeStyle = 'rgba(156,39,176,0.35)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 3]);
+    ctx.strokeRect(toCanvasX(s.x), toCanvasY(s.y), toCanvasW(s.w), toCanvasH(s.h));
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(156,39,176,0.06)';
+    ctx.fillRect(toCanvasX(s.x), toCanvasY(s.y), toCanvasW(s.w), toCanvasH(s.h));
+    // Station label
+    ctx.fillStyle = 'rgba(156,39,176,0.5)';
+    ctx.font = `${Math.max(9, 10 * zoom)}px "Segoe UI"`;
+    ctx.textAlign = 'center';
+    ctx.fillText(s.label, toCanvasX(s.x + s.w/2), toCanvasY(s.y + 1.5));
+  });
+
+  // Restricted zones (red semi-transparent)
+  RESTRICTED_ZONES.forEach(z => {
+    const isHover = hoveredObj && hoveredObj.type === 'zone' && hoveredObj.id === z.id;
+    const isSel = selectedObj && selectedObj.type === 'zone' && selectedObj.id === z.id;
+    ctx.fillStyle = isSel ? 'rgba(244,67,54,0.25)' : isHover ? 'rgba(244,67,54,0.2)' : 'rgba(244,67,54,0.1)';
+    ctx.fillRect(toCanvasX(z.x), toCanvasY(z.y), toCanvasW(z.w), toCanvasH(z.h));
+    ctx.strokeStyle = isSel ? '#F44336' : 'rgba(244,67,54,0.5)';
+    ctx.lineWidth = isSel ? 2 : 1;
+    ctx.setLineDash([4, 2]);
+    ctx.strokeRect(toCanvasX(z.x), toCanvasY(z.y), toCanvasW(z.w), toCanvasH(z.h));
+    ctx.setLineDash([]);
+    // Label
+    ctx.fillStyle = 'rgba(244,67,54,0.7)';
+    ctx.font = `${Math.max(8, 9 * zoom)}px "Segoe UI"`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`${z.id}`, toCanvasX(z.x + z.w/2), toCanvasY(z.y + z.h/2 - 0.5));
+    ctx.fillText(z.type, toCanvasX(z.x + z.w/2), toCanvasY(z.y + z.h/2 + 1.5));
+  });
+
+  // Ground pits (blue)
+  GROUND_PITS.forEach(p => {
+    const isHover = hoveredObj && hoveredObj.type === 'pit' && hoveredObj.id === p.id;
+    const isSel = selectedObj && selectedObj.type === 'pit' && selectedObj.id === p.id;
+    ctx.fillStyle = isSel ? 'rgba(14,165,233,0.35)' : isHover ? 'rgba(14,165,233,0.25)' : 'rgba(14,165,233,0.15)';
+    ctx.fillRect(toCanvasX(p.x), toCanvasY(p.y), toCanvasW(p.w), toCanvasH(p.h));
+    ctx.strokeStyle = isSel ? '#2196F3' : '#2196F3';
+    ctx.lineWidth = isSel ? 2 : 1.5;
+    ctx.strokeRect(toCanvasX(p.x), toCanvasY(p.y), toCanvasW(p.w), toCanvasH(p.h));
+    // Hatching
+    ctx.strokeStyle = 'rgba(14,165,233,0.2)';
+    ctx.lineWidth = 0.5;
+    const px = toCanvasX(p.x), py = toCanvasY(p.y), pw = toCanvasW(p.w), ph = toCanvasH(p.h);
+    for (let d = 0; d < pw + ph; d += 6) {
+      ctx.beginPath();
+      ctx.moveTo(px + Math.min(d, pw), py + Math.max(0, d - pw));
+      ctx.lineTo(px + Math.max(0, d - ph), py + Math.min(d, ph));
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#2196F3';
+    ctx.font = `bold ${Math.max(9, 10 * zoom)}px "Segoe UI"`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`${p.id}`, toCanvasX(p.x + p.w/2), toCanvasY(p.y + p.h/2 + 0.5));
+  });
+
+  // Foundations (yellow)
+  FOUNDATIONS.forEach(f => {
+    const isHover = hoveredObj && hoveredObj.type === 'foundation' && hoveredObj.id === f.id;
+    const isSel = selectedObj && selectedObj.type === 'foundation' && selectedObj.id === f.id;
+    ctx.fillStyle = isSel ? 'rgba(255,235,59,0.3)' : isHover ? 'rgba(255,235,59,0.2)' : 'rgba(255,235,59,0.1)';
+    ctx.fillRect(toCanvasX(f.x), toCanvasY(f.y), toCanvasW(f.w), toCanvasH(f.h));
+    ctx.strokeStyle = '#CA8A04';
+    ctx.lineWidth = isSel ? 2 : 1;
+    ctx.strokeRect(toCanvasX(f.x), toCanvasY(f.y), toCanvasW(f.w), toCanvasH(f.h));
+    // Anchor points (corners)
+    ctx.fillStyle = '#CA8A04';
+    [[f.x, f.y],[f.x+f.w, f.y],[f.x, f.y+f.h],[f.x+f.w, f.y+f.h]].forEach(([ax,ay]) => {
+      ctx.beginPath();
+      ctx.arc(toCanvasX(ax), toCanvasY(ay), 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.font = `${Math.max(8, 9 * zoom)}px "Segoe UI"`;
+    ctx.textAlign = 'center';
+    ctx.fillText(f.id, toCanvasX(f.x + f.w/2), toCanvasY(f.y + f.h/2 + 0.5));
+  });
+
+  // Crane runways (orange dashed)
+  if (showCraneLayer) {
+    CRANE_RUNWAYS.forEach(c => {
+      const isHover = hoveredObj && hoveredObj.type === 'crane' && hoveredObj.id === c.id;
+      const isSel = selectedObj && selectedObj.type === 'crane' && selectedObj.id === c.id;
+      ctx.strokeStyle = isSel ? '#FF9800' : isHover ? 'rgba(255,152,0,0.8)' : 'rgba(255,152,0,0.5)';
+      ctx.lineWidth = isSel ? 3 : 2;
+      ctx.setLineDash([10, 5]);
+      ctx.beginPath();
+      ctx.moveTo(toCanvasX(c.x1), toCanvasY(c.y));
+      ctx.lineTo(toCanvasX(c.x2), toCanvasY(c.y));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Label
+      ctx.fillStyle = '#FF9800';
+      ctx.font = `bold ${Math.max(10, 11 * zoom)}px "Segoe UI"`;
+      ctx.textAlign = 'center';
+      ctx.fillText(`${c.id} · ${c.max_load/1000}t · H=${c.rail_elev/1000}m`, toCanvasX((c.x1 + c.x2)/2), toCanvasY(c.y) - 6);
+    });
+  }
+
+  // Assets (green rectangles with icons)
+  ASSETS.forEach(a => {
+    const isHover = hoveredObj && hoveredObj.type === 'asset' && hoveredObj.id === a.id;
+    const isSel = selectedObj && selectedObj.type === 'asset' && selectedObj.id === a.id;
+    const isDragging = dragObj && dragObj.id === a.id;
+
+    let fillColor = 'rgba(76,175,80,0.2)';
+    let strokeColor = '#4CAF50';
+    if (a.movement === 'CRANE_ONLY') { fillColor = 'rgba(255,152,0,0.15)'; strokeColor = '#FFA726'; }
+    if (a.category === 'AGV') { fillColor = 'rgba(16,185,129,0.15)'; strokeColor = '#00BCD4'; }
+    if (a.category === 'CNC' || a.category === 'ROBOT') { fillColor = 'rgba(103,58,183,0.15)'; strokeColor = '#7E57C2'; }
+
+    if (isSel) { fillColor = fillColor.replace('0.15', '0.35').replace('0.2', '0.35'); }
+    if (isHover || isDragging) { fillColor = fillColor.replace('0.15', '0.25').replace('0.2', '0.3'); }
+
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(toCanvasX(a.x), toCanvasY(a.y), toCanvasW(a.w), toCanvasH(a.h));
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = (isSel || isDragging) ? 2 : 1;
+    ctx.strokeRect(toCanvasX(a.x), toCanvasY(a.y), toCanvasW(a.w), toCanvasH(a.h));
+
+    // ID label
+    ctx.fillStyle = strokeColor;
+    ctx.font = `${Math.max(7, 8 * zoom)}px monospace`;
+    ctx.textAlign = 'center';
+    const labelY = toCanvasY(a.y + a.h/2 + 0.3);
+    ctx.fillText(a.id.replace('MDI-2024-',''), toCanvasX(a.x + a.w/2), labelY);
+
+    // Selection ring
+    if (isSel) {
+      ctx.strokeStyle = 'rgba(16,185,129,0.6)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3,3]);
+      ctx.strokeRect(toCanvasX(a.x) - 3, toCanvasY(a.y) - 3, toCanvasW(a.w) + 6, toCanvasH(a.h) + 6);
+      ctx.setLineDash([]);
+    }
+  });
+
+  // Dragging indicator
+  if (dragObj) {
+    ctx.fillStyle = 'rgba(16,185,129,0.1)';
+    ctx.strokeStyle = 'var(--accent)';
+    ctx.setLineDash([3,3]);
+    ctx.strokeRect(toCanvasX(dragObjStartX), toCanvasY(dragObjStartY), toCanvasW(dragObj.w), toCanvasH(dragObj.h));
+    ctx.setLineDash([]);
+  }
+
+  // GCP reference point
+  ctx.fillStyle = '#FF5252';
+  ctx.beginPath();
+  ctx.arc(toCanvasX(2), toCanvasY(58), 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#FF5252';
+  ctx.font = '9px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('GCP-001 (0,0,0)', toCanvasX(2) + 8, toCanvasY(58) + 3);
+}
+
+function hitTest(mx, my) {
+  const x = fromCanvasX(mx), y = fromCanvasY(my);
+  // Assets first (top layer)
+  for (const a of ASSETS) {
+    if (x >= a.x && x <= a.x + a.w && y >= a.y && y <= a.y + a.h) {
+      return { type: 'asset', id: a.id, obj: a };
+    }
+  }
+  for (const p of GROUND_PITS) {
+    if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) {
+      return { type: 'pit', id: p.id, obj: p };
+    }
+  }
+  for (const f of FOUNDATIONS) {
+    if (x >= f.x && x <= f.x + f.w && y >= f.y && y <= f.y + f.h) {
+      return { type: 'foundation', id: f.id, obj: f };
+    }
+  }
+  for (const c of CRANE_RUNWAYS) {
+    if (x >= c.x1 && x <= c.x2 && Math.abs(y - c.y) < 2) {
+      return { type: 'crane', id: c.id, obj: c };
+    }
+  }
+  for (const z of RESTRICTED_ZONES) {
+    if (x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h) {
+      return { type: 'zone', id: z.id, obj: z };
+    }
+  }
+  for (const s of STATIONS) {
+    if (x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h) {
+      return { type: 'station', id: s.id, obj: s };
+    }
+  }
+  return null;
+}
+
+// =====================================================
+// CANVAS EVENT HANDLERS
+// =====================================================
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const wx = fromCanvasX(mx);
+  const wy = fromCanvasY(my);
+  document.getElementById('coordDisplay').textContent = `X: ${(wx * 1200).toFixed(0)}mm Y: ${(wy * 1000).toFixed(0)}mm`;
+
+  if (dragObj) {
+    const dx = (e.clientX - dragStartX) / (scaleX * zoom);
+    const dy = (e.clientY - dragStartY) / (scaleY * zoom);
+    dragObj.x = dragObjStartX + dx;
+    dragObj.y = dragObjStartY + dy;
+    render();
+    return;
+  }
+
+  const hit = hitTest(mx, my);
+  if (hit !== hoveredObj) {
+    hoveredObj = hit;
+    canvas.style.cursor = hit ? 'pointer' : 'default';
+    render();
+  }
+  // Tooltip
+  const tt = document.getElementById('canvasTooltip');
+  if (hit) {
+    tt.style.display = 'block';
+    tt.style.left = (mx + 15) + 'px';
+    tt.style.top = (my + 15) + 'px';
+    if (mx + 230 > canvasW) tt.style.left = (mx - 220) + 'px';
+    if (my + 150 > canvasH) tt.style.top = (my - 120) + 'px';
+    tt.innerHTML = getTooltipHTML(hit);
+  } else {
+    tt.style.display = 'none';
+  }
+});
+
+canvas.addEventListener('mousedown', (e) => {
+  if (currentTool !== 'select') return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const hit = hitTest(mx, my);
+  if (hit && hit.type === 'asset') {
+    dragObj = hit.obj;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    dragObjStartX = hit.obj.x;
+    dragObjStartY = hit.obj.y;
+  }
+});
+
+canvas.addEventListener('mouseup', (e) => {
+  if (dragObj) {
+    const moved = Math.abs(e.clientX - dragStartX) + Math.abs(e.clientY - dragStartY);
+    if (moved > 5) {
+      addAuditEntry('action', 'ASSET_POSITION_CHANGED', `${dragObj.id} · (${(dragObj.x*1200).toFixed(0)},${(dragObj.y*1000).toFixed(0)})mm`);
+      showToast('info', 'Ontology 变更', `Asset [${dragObj.id}] position 已更新 · AuditLog 已追加`);
+      checkCollisions(dragObj);
+    }
+    dragObj = null;
+    render();
+    return;
+  }
+  // Click select
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const hit = hitTest(mx, my);
+  selectedObj = hit;
+  render();
+  updatePropPanel(hit);
+});
+
+canvas.addEventListener('dblclick', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const hit = hitTest(mx, my);
+  if (hit && (hit.type === 'pit' || hit.type === 'zone')) {
+    showConstraintModal(hit);
+  }
+});
+
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+  zoom = Math.max(0.5, Math.min(3, zoom * delta));
+  document.getElementById('zoomDisplay').textContent = Math.round(zoom * 100) + '%';
+  render();
+});
+
+function checkCollisions(asset) {
+  // Check against pits
+  for (const p of GROUND_PITS) {
+    if (asset.x < p.x + p.w && asset.x + asset.w > p.x && asset.y < p.y + p.h && asset.y + asset.h > p.y) {
+      showToast('error', '碰撞检测', `${asset.id} 与 ${p.id} 重叠 · TRAVERSE_PROHIBITED 约束违规`);
+      return;
+    }
+  }
+  for (const z of RESTRICTED_ZONES) {
+    if (asset.x < z.x + z.w && asset.x + asset.w > z.x && asset.y < z.y + z.h && asset.y + asset.h > z.y) {
+      showToast('warning', '禁区警告', `${asset.id} 进入 ${z.id} (${z.type}) 区域`);
+      return;
+    }
+  }
+}
+
+// =====================================================
+// TOOLTIP
+// =====================================================
+function getTooltipHTML(hit) {
+  if (!hit) return '';
+  const o = hit.obj;
+  switch(hit.type) {
+    case 'asset': return `
+      <div class="tt-title">Asset [${o.id}]</div>
+      <div class="tt-row"><span class="tt-key">名称</span><span class="tt-val">${o.label}</span></div>
+      <div class="tt-row"><span class="tt-key">类别</span><span class="tt-val">${o.category}</span></div>
+      <div class="tt-row"><span class="tt-key">重量</span><span class="tt-val">${o.weight.toLocaleString()}kg</span></div>
+      <div class="tt-row"><span class="tt-key">移动方式</span><span class="tt-val">${o.movement}</span></div>
+      ${o.station ? `<div class="tt-row"><span class="tt-key">站位</span><span class="tt-val">${o.station}</span></div>` : ''}
+      ${o.crane ? `<div class="tt-row"><span class="tt-key">吊车</span><span class="tt-val">${o.crane}</span></div>` : ''}
+      <div style="margin-top:4px;font-size:9px;color:#64748B">拖拽移动 / 双击查看详情</div>`;
+    case 'pit': return `
+      <div class="tt-title">GroundPit [${o.id}]</div>
+      <div class="tt-row"><span class="tt-key">类型</span><span class="tt-val">${o.type}</span></div>
+      <div class="tt-row"><span class="tt-key">深度</span><span class="tt-val">${o.depth}mm</span></div>
+      <div class="tt-row"><span class="tt-key">约束</span><span class="tt-val" style="color:#FF5252">${o.constraint}</span></div>
+      <div class="tt-row"><span class="tt-key">甲方确认</span><span class="tt-val" style="color:${o.confirmed?'#4CAF50':'#F44336'}">${o.confirmed?'已确认':'待确认'}</span></div>
+      <div style="margin-top:4px;font-size:9px;color:#64748B">双击配置约束</div>`;
+    case 'crane': return `
+      <div class="tt-title">CraneRunway [${o.id}]</div>
+      <div class="tt-row"><span class="tt-key">跨度</span><span class="tt-val">${o.span.toLocaleString()}mm</span></div>
+      <div class="tt-row"><span class="tt-key">轨面标高</span><span class="tt-val">${o.rail_elev.toLocaleString()}mm</span></div>
+      <div class="tt-row"><span class="tt-key">额定载荷</span><span class="tt-val">${(o.max_load/1000)}t</span></div>`;
+    case 'zone': return `
+      <div class="tt-title">RestrictedZone [${o.id}]</div>
+      <div class="tt-row"><span class="tt-key">类型</span><span class="tt-val">${o.type}</span></div>
+      <div class="tt-row"><span class="tt-key">甲方确认</span><span class="tt-val" style="color:${o.confirmed?'#4CAF50':'#F44336'}">${o.confirmed?'已确认':'待确认'}</span></div>
+      <div style="margin-top:4px;font-size:9px;color:#64748B">双击配置约束</div>`;
+    case 'foundation': return `
+      <div class="tt-title"> FixtureFoundation [${o.id}]</div>
+      <div class="tt-row"><span class="tt-key">兼容工装</span><span class="tt-val">${o.compatible.join(', ')}</span></div>`;
+    case 'station': return `
+      <div class="tt-title">Station [${o.id}]</div>
+      <div class="tt-row"><span class="tt-key">标签</span><span class="tt-val">${o.label}</span></div>`;
+    default: return '';
+  }
+}
+
+// =====================================================
+// PROPERTY PANEL
+// =====================================================
+function updatePropPanel(hit) {
+  const propsEl = document.getElementById('selectedObjProps');
+  const linksGroup = document.getElementById('linksGroup');
+  const linksPanel = document.getElementById('linksPanel');
+  const actionsGroup = document.getElementById('actionsGroup');
+  const actionsPanel = document.getElementById('actionsPanel');
+
+  if (!hit) {
+    propsEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:11px;">点击画布中的元素查看属性</div>';
+    linksGroup.style.display = 'none';
+    actionsGroup.style.display = 'none';
+    return;
+  }
+
+  const o = hit.obj;
+  let html = '';
+  let linksHtml = '';
+  let actionsHtml = '';
+
+  switch(hit.type) {
+    case 'asset':
+      html = `
+        <div class="prop-row"><span class="prop-key">objectType</span><span class="prop-val">Asset</span></div>
+        <div class="prop-row"><span class="prop-key">master_device_id</span><span class="prop-val">${o.id}</span></div>
+        <div class="prop-row"><span class="prop-key">ontology_object_id</span><span class="prop-val font-mono text-xs">uuid-asset-${o.id.slice(-3)}</span></div>
+        <div class="prop-row"><span class="prop-key">lifecycle_state</span><span class="prop-val pass">ACTIVE</span></div>
+        <div class="prop-row"><span class="prop-key">名称</span><span class="prop-val">${o.label}</span></div>
+        <div class="prop-row"><span class="prop-key">category</span><span class="prop-val">${o.category}</span></div>
+        <div class="prop-row"><span class="prop-key">weight_kg</span><span class="prop-val">${o.weight.toLocaleString()}</span></div>
+        <div class="prop-row"><span class="prop-key">movement_mode</span><span class="prop-val">${o.movement}</span></div>
+        ${o.station ? `<div class="prop-row"><span class="prop-key">station</span><span class="prop-val">${o.station}</span></div>` : ''}
+        ${o.crane ? `<div class="prop-row"><span class="prop-key">crane_requirement</span><span class="prop-val">${o.crane}</span></div>` : ''}
+        <div class="prop-row"><span class="prop-key">position_mm</span><span class="prop-val">(${(o.x*1200).toFixed(0)}, ${(o.y*1000).toFixed(0)}, 0)</span></div>
+        <div class="prop-row"><span class="prop-key">footprint_mm</span><span class="prop-val">${(o.w*1200).toFixed(0)} × ${(o.h*1000).toFixed(0)}</span></div>
+        <div class="prop-row"><span class="prop-key">ontology_version</span><span class="prop-val text-dim">AeroOntology-v1.0</span></div>`;
+      linksHtml = `
+        ${o.station ? `<div class="link-item"><span class="link-type">PLACED_IN</span><span class="link-arrow">──▶</span><span class="link-target">Station [${o.station}]</span></div>` : ''}
+        <div class="link-item"><span class="link-type">DESCRIBED_BY</span><span class="link-arrow">◀──</span><span class="link-target">SiteModel [SM-001]</span></div>
+        ${o.crane ? `<div class="link-item"><span class="link-type">ACCESSED_BY</span><span class="link-arrow">──▶</span><span class="link-target">CraneRunway [${o.crane}]</span></div>` : ''}
+        <div class="link-item"><span class="link-type">GOVERNED_BY</span><span class="link-arrow">──▶</span><span class="link-target">Constraint [C001]</span></div>`;
+      actionsHtml = `
+        <button class="action-btn" onclick="showToast('info','Ontology','requestHumanReview 已执行');addAuditEntry('action','REVIEW_REQUESTED','Asset ${o.id}')"><span class="action-icon"></span> requestHumanReview<span class="action-role">PLANNER_CHIEF</span></button>
+        <button class="action-btn locked"><span class="action-icon"></span> lockObject<span class="action-role">CHECKPOINT_APPROVER</span></button>`;
+      break;
+
+    case 'pit':
+      html = `
+        <div class="prop-row"><span class="prop-key">objectType</span><span class="prop-val">GroundPit</span></div>
+        <div class="prop-row"><span class="prop-key">id</span><span class="prop-val">${o.id}</span></div>
+        <div class="prop-row"><span class="prop-key">ontology_object_id</span><span class="prop-val font-mono text-xs">${o.ontology_id}</span></div>
+        <div class="prop-row"><span class="prop-key">type</span><span class="prop-val">${o.type}</span></div>
+        <div class="prop-row"><span class="prop-key">depth_mm</span><span class="prop-val">${o.depth}</span></div>
+        <div class="prop-row"><span class="prop-key">constraint</span><span class="prop-val fail">${o.constraint}</span></div>
+        <div class="prop-row"><span class="prop-key">client_confirmed</span><span class="prop-val ${o.confirmed?'pass':'fail'}">${o.confirmed}</span></div>`;
+      linksHtml = `
+        <div class="link-item"><span class="link-type">DESCRIBED_BY</span><span class="link-arrow">◀──</span><span class="link-target">SiteModel [SM-001]</span></div>
+        <div class="link-item"><span class="link-type">GENERATES</span><span class="link-arrow">──▶</span><span class="link-target">Constraint [TRAVERSE_PROHIBITED]</span></div>`;
+      actionsHtml = `
+        <button class="action-btn" onclick="confirmPit('${o.id}')"><span class="action-icon">OK</span> 甲方确认（client_confirm）<span class="action-role">CHECKPOINT_APPROVER</span></button>
+        <button class="action-btn" onclick="showToast('info','Ontology','requestHumanReview');addAuditEntry('action','REVIEW_REQUESTED','GroundPit ${o.id}')"><span class="action-icon"></span> requestHumanReview<span class="action-role">PLANNER_CHIEF+</span></button>`;
+      break;
+
+    case 'crane':
+      html = `
+        <div class="prop-row"><span class="prop-key">objectType</span><span class="prop-val">CraneRunway</span></div>
+        <div class="prop-row"><span class="prop-key">id</span><span class="prop-val">${o.id}</span></div>
+        <div class="prop-row"><span class="prop-key">ontology_object_id</span><span class="prop-val font-mono text-xs">${o.ontology_id}</span></div>
+        <div class="prop-row"><span class="prop-key">lifecycle_state</span><span class="prop-val pass">ACTIVE</span></div>
+        <div class="prop-row"><span class="prop-key">span_mm</span><span class="prop-val">${o.span.toLocaleString()}</span></div>
+        <div class="prop-row"><span class="prop-key">rail_elevation_mm</span><span class="prop-val">${o.rail_elev.toLocaleString()}</span></div>
+        <div class="prop-row"><span class="prop-key">max_load_kg</span><span class="prop-val">${o.max_load.toLocaleString()}</span></div>
+        <div class="prop-row"><span class="prop-key">clearance_below</span><span class="prop-val">500mm</span></div>`;
+      linksHtml = `
+        <div class="link-item"><span class="link-type">DESCRIBED_BY</span><span class="link-arrow">◀──</span><span class="link-target">SiteModel [SM-001]</span></div>
+        <div class="link-item"><span class="link-type">GOVERNS</span><span class="link-arrow">──▶</span><span class="link-target">Constraint [CRANE_PATH]</span></div>`;
+      actionsHtml = `
+        <button class="action-btn" onclick="showToast('info','Ontology','requestHumanReview');addAuditEntry('action','REVIEW_REQUESTED','CraneRunway ${o.id}')"><span class="action-icon"></span> requestHumanReview<span class="action-role">PLANNER_CHIEF+</span></button>`;
+      break;
+
+    case 'zone':
+      html = `
+        <div class="prop-row"><span class="prop-key">objectType</span><span class="prop-val">RestrictedZone</span></div>
+        <div class="prop-row"><span class="prop-key">id</span><span class="prop-val">${o.id}</span></div>
+        <div class="prop-row"><span class="prop-key">type</span><span class="prop-val fail">${o.type}</span></div>
+        <div class="prop-row"><span class="prop-key">constraint</span><span class="prop-val fail">最高优先级·不可覆盖</span></div>
+        <div class="prop-row"><span class="prop-key">client_confirmed</span><span class="prop-val ${o.confirmed?'pass':'fail'}">${o.confirmed}</span></div>`;
+      linksHtml = `
+        <div class="link-item"><span class="link-type">DESCRIBED_BY</span><span class="link-arrow">◀──</span><span class="link-target">SiteModel [SM-001]</span></div>
+        <div class="link-item"><span class="link-type">GENERATES</span><span class="link-arrow">──▶</span><span class="link-target">Constraint [${o.type}]</span></div>`;
+      actionsHtml = `
+        <button class="action-btn" onclick="confirmZone('${o.id}')"><span class="action-icon">OK</span> 甲方确认<span class="action-role">CHECKPOINT_APPROVER</span></button>`;
+      break;
+
+    case 'foundation':
+      html = `
+        <div class="prop-row"><span class="prop-key">objectType</span><span class="prop-val">FixtureFoundation</span></div>
+        <div class="prop-row"><span class="prop-key">id</span><span class="prop-val">${o.id}</span></div>
+        <div class="prop-row"><span class="prop-key">anchor_pattern</span><span class="prop-val">4-POINT</span></div>
+        <div class="prop-row"><span class="prop-key">compatible</span><span class="prop-val">${o.compatible.join(', ')}</span></div>`;
+      linksHtml = `<div class="link-item"><span class="link-type">DESCRIBED_BY</span><span class="link-arrow">◀──</span><span class="link-target">SiteModel [SM-001]</span></div>`;
+      actionsHtml = '';
+      break;
+
+    case 'station':
+      html = `
+        <div class="prop-row"><span class="prop-key">objectType</span><span class="prop-val">Station</span></div>
+        <div class="prop-row"><span class="prop-key">station_id</span><span class="prop-val">${o.id}</span></div>
+        <div class="prop-row"><span class="prop-key">label</span><span class="prop-val">${o.label}</span></div>
+        <div class="prop-row"><span class="prop-key">lifecycle_state</span><span class="prop-val pass">ACTIVE</span></div>`;
+      const stationAssets = ASSETS.filter(a => a.station === o.id);
+      linksHtml = `<div class="link-item"><span class="link-type">DESCRIBED_BY</span><span class="link-arrow">◀──</span><span class="link-target">SiteModel [SM-001]</span></div>`;
+      stationAssets.forEach(a => {
+        linksHtml += `<div class="link-item"><span class="link-type">PLACED_IN</span><span class="link-arrow">◀──</span><span class="link-target">Asset [${a.id}]</span></div>`;
+      });
+      actionsHtml = '';
+      break;
+  }
+
+  propsEl.innerHTML = html;
+  linksGroup.style.display = linksHtml ? 'block' : 'none';
+  linksPanel.innerHTML = linksHtml;
+  actionsGroup.style.display = actionsHtml ? 'block' : 'none';
+  actionsPanel.innerHTML = actionsHtml;
+}
+
+// =====================================================
+// LEFT PANEL: Layer Tree & CP-A Checklist
+// =====================================================
+function buildLayerTree() {
+  const recogEl = document.getElementById('recognizedLayers');
+  let html = '';
+  RECOGNIZED_LAYERS.forEach(l => {
+    html += `<div class="layer-item" onclick="selectLayer(this,'${l.name}')">
+      <div class="layer-color" style="background:${l.color}"></div>
+      <span class="layer-name">${l.name}</span>
+      <span class="layer-badge ok">${l.count}</span>
+    </div>`;
+  });
+  recogEl.innerHTML = html;
+
+  const unrecogEl = document.getElementById('unrecognizedLayers');
+  html = '';
+  UNRECOGNIZED_LAYERS.forEach(l => {
+    html += `<div class="layer-item unrecognized" onclick="selectUnrecogLayer('${l.name}')">
+      <div class="layer-color" style="background:var(--danger)"></div>
+      <span class="layer-name">${l.name}</span>
+      <span class="layer-badge warn">?</span>
+    </div>`;
+  });
+  unrecogEl.innerHTML = html;
+}
+
+function buildCPAChecklist() {
+  const el = document.getElementById('cpaChecklist');
+  let html = '';
+  let passCount = 0;
+  for (const [id, cond] of Object.entries(CP_A)) {
+    if (cond.pass) passCount++;
+    html += `<div class="cpa-item ${cond.pass ? 'pass' : 'fail'}" id="cpa-${id}">
+      <span class="cpa-icon">${cond.pass ? 'PASS' : 'FAIL'}</span>
+      <span class="cpa-label">${cond.label}</span>
+      <span class="cpa-id">${id}</span>
+    </div>`;
+  }
+  el.innerHTML = html;
+  document.getElementById('cpaProgress').textContent = `${passCount}/7`;
+  document.getElementById('tokenPrereq').textContent = `${passCount}/7 通过`;
+
+  // Update CPA button
+  const btn = document.getElementById('btnCPA');
+  if (passCount === 7) {
+    btn.classList.remove('disabled');
+    btn.textContent = '签发 CP-A Token';
+  } else {
+    btn.classList.add('disabled');
+    btn.textContent = '签发 CP-A Token';
+  }
+
+  // Update blocked list
+  const blocked = Object.entries(CP_A).filter(([,c]) => !c.pass).map(([id]) => id);
+  document.getElementById('tokenBlocked').textContent = blocked.length ? blocked.join(', ') : '无';
+  if (!blocked.length) document.getElementById('tokenBlocked').className = 'prop-val pass';
+}
+
+// =====================================================
+// INTERACTIONS
+// =====================================================
+function toggleSection(header) {
+  const icon = header.querySelector('.icon');
+  const body = header.nextElementSibling;
+  if (body.classList.contains('collapsed')) {
+    body.classList.remove('collapsed');
+    icon.classList.remove('collapsed');
+  } else {
+    body.classList.add('collapsed');
+    icon.classList.add('collapsed');
+  }
+}
+
+function toggleLayerGroup(header) {
+  const arrow = header.querySelector('.arrow');
+  const body = header.nextElementSibling;
+  if (body.style.display === 'none') {
+    body.style.display = 'block';
+    arrow.classList.add('open');
+  } else {
+    body.style.display = 'none';
+    arrow.classList.remove('open');
+  }
+}
+
+function setTool(tool, btn) {
+  currentTool = tool;
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function toggleCraneLayer(btn) {
+  showCraneLayer = !showCraneLayer;
+  btn.classList.toggle('active');
+  render();
+}
+
+function selectLayer(el, name) {
+  document.querySelectorAll('.layer-item').forEach(i => i.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function selectUnrecogLayer(name) {
+  showToast('warning', '未识别图层', `${name} 需要人工标注语义类别`);
+}
+
+function triggerUpload() {
+  showToast('info', '文件上传', '支持格式: DWG 2018+ · IFC 2x3/4 · RVT 2022+ · LAS · E57');
+}
+
+// Parse animation
+function startParse() {
+  const overlay = document.getElementById('parseOverlay');
+  overlay.classList.add('show');
+  const steps = [
+    { text: '读取 DWG 文件结构...', dur: 800 },
+    { text: '识别图层语义 (487 layers)...', dur: 1200 },
+    { text: '提取航空特有要素 (地坑/吊车梁/禁区)...', dur: 1000 },
+    { text: 'GCP 控制点坐标系对齐...', dur: 600 },
+    { text: '精度验证: 一般 0.72mm · 关键 0.08mm', dur: 500 },
+    { text: '批量注册 Asset Ontology 对象 (24)...', dur: 800 },
+    { text: 'MDI 主数据匹配 (95.8%)...', dur: 600 },
+    { text: '写入 AuditLog...', dur: 300 },
+    { text: 'SiteModel SM-001 v1.3.0 生成完成', dur: 500 },
+  ];
+
+  const stepsEl = document.getElementById('parseSteps');
+  stepsEl.innerHTML = steps.map((s, i) => `<div class="parse-step pending" id="parseStep${i}"><span class="step-icon">--</span><span class="step-text">${s.text}</span></div>`).join('');
+
+  let total = steps.reduce((a, s) => a + s.dur, 0);
+  let elapsed = 0;
+
+  function runStep(i) {
+    if (i >= steps.length) {
+      document.getElementById('parseFill').style.width = '100%';
+      document.getElementById('parsePercent').textContent = '100%';
+      document.getElementById('parseTitle').textContent = '解析完成';
+      setTimeout(() => overlay.classList.remove('show'), 1000);
+      showToast('success', '解析完成', `SiteModel SM-001 v1.3.0 · 487层 · 24工装 · 387s`);
+      addAuditEntry('action', 'SITEMODEL_PARSE_COMPLETED', 'SM-001 v1.3.0 · 487层 · 387s');
+      return;
+    }
+    const step = document.getElementById(`parseStep${i}`);
+    step.classList.remove('pending');
+    step.classList.add('active');
+    step.querySelector('.step-icon').textContent = '>>';
+
+    setTimeout(() => {
+      step.classList.remove('active');
+      step.classList.add('done');
+      step.querySelector('.step-icon').textContent = 'OK';
+      elapsed += steps[i].dur;
+      document.getElementById('parseFill').style.width = Math.round(elapsed / total * 100) + '%';
+      document.getElementById('parsePercent').textContent = Math.round(elapsed / total * 100) + '%';
+      runStep(i + 1);
+    }, steps[i].dur);
+  }
+  runStep(0);
+}
+
+// CP-A Modal
+function showCPAModal() {
+  const passCount = Object.values(CP_A).filter(c => c.pass).length;
+  if (passCount < 7) {
+    showToast('error', 'CP-A 阻断', '前置条件未全部满足，无法签发 Token');
+    return;
+  }
+  const modalChecks = document.getElementById('cpaModalChecks');
+  let html = '<div style="margin-bottom:8px;font-size:12px;font-weight:700;color:var(--success)">全部 7/7 前置条件满足</div>';
+  for (const [id, cond] of Object.entries(CP_A)) {
+    html += `<div class="cpa-item pass"><span class="cpa-icon">OK</span><span class="cpa-label">${cond.label}</span><span class="cpa-id">${id}</span></div>`;
+  }
+  modalChecks.innerHTML = html;
+  document.getElementById('cpaModal').classList.add('show');
+}
+function closeCPAModal() { document.getElementById('cpaModal').classList.remove('show'); }
+
+function issueCPAToken() {
+  closeCPAModal();
+  SITE_MODEL.lifecycle_state = 'LOCKED';
+  document.getElementById('smState').textContent = 'LOCKED';
+  document.getElementById('smState').className = 'obj-state locked';
+  document.getElementById('tokenStatus').textContent = 'CP-A-uuid-20260413-001';
+  document.getElementById('tokenStatus').className = 'prop-val pass';
+  showToast('success', 'CP-A Token 已签发', 'SiteModel SM-001 已锁定 · Token: CP-A-uuid-20260413-001 · 下游 PRD-3 布局优化已解锁');
+  addAuditEntry('system', 'TRUST_TOKEN_ISSUED', 'CP-A-uuid-20260413-001 · SM-001 LOCKED');
+}
+
+// Constraint modals
+function showConstraintModal(hit) {
+  const o = hit.obj;
+  const modal = document.getElementById('constraintModal');
+  const title = document.getElementById('constraintTitle');
+  const body = document.getElementById('constraintBody');
+
+  if (hit.type === 'pit') {
+    title.textContent = `地坑约束配置 · ${o.id}`;
+    body.innerHTML = `
+      <div class="modal-row"><span class="modal-label">对象类型</span><span class="modal-value">GroundPit</span></div>
+      <div class="modal-row"><span class="modal-label">Ontology ID</span><span class="modal-value">${o.ontology_id}</span></div>
+      <div class="modal-row"><span class="modal-label">类型</span><span class="modal-value">${o.type}</span></div>
+      <div class="modal-row"><span class="modal-label">深度</span><span class="modal-value">${o.depth}mm</span></div>
+      <div class="modal-row"><span class="modal-label">约束</span><span class="modal-value" style="color:var(--danger)">${o.constraint}</span></div>
+      <div class="modal-row"><span class="modal-label">覆盖承重</span><span class="modal-value">5000 kg</span></div>
+      <div class="modal-row">
+        <span class="modal-label">甲方确认</span>
+        <span class="modal-value" style="color:${o.confirmed?'var(--success)':'var(--danger)'}">${o.confirmed ? '已确认' : '待确认'}</span>
+      </div>
+      <div style="margin-top:12px;padding:8px;border-radius:6px;background:rgba(244,67,54,0.1);border:1px solid rgba(244,67,54,0.2);font-size:11px;">
+        此地坑一经识别，自动生成 <strong>TRAVERSE_PROHIBITED</strong> 约束<br>
+        此约束优先级最高，<strong>不可被下游模块覆盖</strong>（PRD-1 业务规则 §2）
+      </div>`;
+  } else if (hit.type === 'zone') {
+    title.textContent = `禁区约束配置 · ${o.id}`;
+    body.innerHTML = `
+      <div class="modal-row"><span class="modal-label">对象类型</span><span class="modal-value">RestrictedZone</span></div>
+      <div class="modal-row"><span class="modal-label">类型</span><span class="modal-value">${o.type}</span></div>
+      <div class="modal-row"><span class="modal-label">约束等级</span><span class="modal-value" style="color:var(--danger)">最高优先级 · 不可覆盖</span></div>
+      <div class="modal-row">
+        <span class="modal-label">甲方确认</span>
+        <span class="modal-value" style="color:${o.confirmed?'var(--success)':'var(--danger)'}">${o.confirmed ? '已确认' : '待确认'}</span>
+      </div>
+      <div style="margin-top:12px;padding:8px;border-radius:6px;background:rgba(244,67,54,0.1);border:1px solid rgba(244,67,54,0.2);font-size:11px;">
+        ${o.type === 'EXPLOSION_PROOF' ? '防爆区域，禁止明火作业，人员进入须防静电服' :
+            o.type === 'CLEANROOM' ? '洁净室，温湿度环境约束，人员须穿洁净服' :
+            o.type === 'NOISE_ZONE' ? '噪声隔离区，人员须佩戴防护装备' : '安全缓冲区，限制人员进入'}<br>
+        此约束优先级最高，<strong>不可被后续模块覆盖</strong>（PRD-1 业务规则 §4）
+      </div>`;
+  }
+  modal.classList.add('show');
+}
+function closeConstraintModal() { document.getElementById('constraintModal').classList.remove('show'); }
+
+function confirmConstraint() {
+  if (selectedObj) {
+    if (selectedObj.type === 'pit') confirmPit(selectedObj.id);
+    if (selectedObj.type === 'zone') confirmZone(selectedObj.id);
+  }
+  closeConstraintModal();
+}
+
+function confirmPit(id) {
+  const pit = GROUND_PITS.find(p => p.id === id);
+  if (pit) {
+    pit.confirmed = true;
+    showToast('success', 'Ontology 变更', `GroundPit [${id}] client_confirmed = true · AuditLog 已追加`);
+    addAuditEntry('action', 'PIT_CLIENT_CONFIRMED', `${id} · TRAVERSE_PROHIBITED`);
+    updateCPACondition('SM005');
+    render();
+    if (selectedObj && selectedObj.id === id) updatePropPanel(selectedObj);
+  }
+}
+
+function confirmZone(id) {
+  const zone = RESTRICTED_ZONES.find(z => z.id === id);
+  if (zone) {
+    zone.confirmed = true;
+    showToast('success', 'Ontology 变更', `RestrictedZone [${id}] client_confirmed = true · AuditLog 已追加`);
+    addAuditEntry('action', 'ZONE_CLIENT_CONFIRMED', `${id} · ${zone.type}`);
+    render();
+    if (selectedObj && selectedObj.id === id) updatePropPanel(selectedObj);
+  }
+}
+
+function updateCPACondition(condId) {
+  // Check if all pits confirmed for SM005
+  if (condId === 'SM005') {
+    const allConfirmed = GROUND_PITS.every(p => p.confirmed);
+    if (allConfirmed) {
+      CP_A.SM005.pass = true;
+      buildCPAChecklist();
+    }
+  }
+}
+
+function applyAISuggestion() {
+  // Simulate AI suggestion application: mark LAYER-423 as recognized
+  const idx = UNRECOGNIZED_LAYERS.findIndex(l => l.name === 'LAYER-423');
+  if (idx >= 0) {
+    UNRECOGNIZED_LAYERS.splice(idx, 1);
+    RECOGNIZED_LAYERS.push({ name: "LAYER-423 (AI标注)", color: "#2196F3", semantic: "restricted_zone_pit", count: 1 });
+    SITE_MODEL.summary.unrecognized_layers--;
+    SITE_MODEL.summary.recognized_layers++;
+    buildLayerTree();
+    document.getElementById('unrecogCount').textContent = UNRECOGNIZED_LAYERS.length;
+    document.getElementById('recogCount').textContent = SITE_MODEL.summary.recognized_layers;
+    document.getElementById('unrecogStatus').textContent = `未识别图层: ${UNRECOGNIZED_LAYERS.length}`;
+
+    showToast('success', 'AI 建议已采纳', 'LAYER-423 → GROUND_PIT · Ontology 对象已注册 · AuditLog 追加 LLM_AGENT 边');
+    addAuditEntry('ai', 'LLM_SUGGESTION_APPLIED', 'LAYER-423 → GROUND_PIT · LLM_AGENT MODIFIED');
+
+    // Update AI card
+    document.getElementById('aiBody').innerHTML = `
+      已采纳：LAYER-423 标注为 <strong style="color:var(--pit-color)">GROUND_PIT</strong><br>
+      <span class="text-xs text-dim">OntologyService.registerObject() · AuditLog.append(LLM_MODIFIED)</span>
+      <div class="ai-reasoning" style="margin-top:8px;opacity:0.7">
+        <div class="ai-chain-title" style="color:var(--success)">Adopted Reasoning (archived)</div>
+        <div class="ai-step"><span class="ai-step-num" style="background:var(--success)">1</span><div class="ai-step-body"><span class="ai-principle-tag naming">命名规则</span> PIT_* 前缀匹配 · +0.20</div></div>
+        <div class="ai-step"><span class="ai-step-num" style="background:var(--success)">2</span><div class="ai-step-body"><span class="ai-principle-tag geometry">几何特征</span> 封闭矩形+深度1200mm · +0.35</div></div>
+        <div class="ai-step"><span class="ai-step-num" style="background:var(--success)">3</span><div class="ai-step-body"><span class="ai-principle-tag spatial">空间上下文</span> 站位通道交汇区 · +0.22</div></div>
+        <div class="ai-conclusion" style="border-left-color:var(--success)">conf=0.87 → 已采纳并归档 · TRAVERSE_PROHIBITED 约束已附加</div>
+      </div>
+    `;
+
+    // Check if all layers recognized → SM001 pass
+    if (UNRECOGNIZED_LAYERS.length === 0) {
+      CP_A.SM001.pass = true;
+      buildCPAChecklist();
+    }
+  }
+}
+
+function dismissAI() {
+  document.getElementById('aiCard').style.display = 'none';
+}
+function askAI() {
+  showToast('info', 'AI 对话', '正在分析 LAYER-423 的几何特征与上下文关联...');
+}
+
+function exportUSD() {
+  showToast('info', '导出', 'OpenUSD 格式导出中... SiteModel SM-001 v1.3.0');
+  addAuditEntry('action', 'OPENUSD_EXPORT_INITIATED', 'SM-001 v1.3.0');
+}
+
+function showVersionDiff() {
+  showToast('info', 'Diff 视图', 'v1.2.3 → v1.3.0 · 新增: 3号地坑 · 更新: 吊车梁B轨迹');
+}
+
+// =====================================================
+// TOAST & AUDIT
+// =====================================================
+function showToast(type, title, msg) {
+  const container = document.getElementById('toastContainer');
+  const icons = { success: '', error: '', warning: '', info: '' };
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `<span class="toast-icon">${icons[type]}</span><div class="toast-body"><div class="toast-title">${title}</div><div class="toast-msg">${msg}</div></div>`;
+  container.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 4000);
+}
+
+function addAuditEntry(type, event, detail) {
+  const log = document.getElementById('auditLog');
+  const now = new Date();
+  const time = now.toTimeString().slice(0,8);
+  const entry = document.createElement('div');
+  entry.className = `audit-entry ${type}`;
+  entry.innerHTML = `<div class="audit-time">${time}</div><div class="audit-event">${event}</div><div class="text-xs text-dim">${detail}</div>`;
+  log.insertBefore(entry, log.firstChild);
+  const count = parseInt(document.getElementById('auditCount').textContent) + 1;
+  document.getElementById('auditCount').textContent = count;
+}
+
+function selectFile(type) {
+  const labels = { dwg: 'C919_FAL_03厂房.dwg', gcp: 'GCP_控制点.csv', xlsx: '设备清单_MBOM_v3.2.xlsx' };
+  showToast('info', '文件信息', `已选择: ${labels[type]}`);
+}
+
+// =====================================================
+// RBAC PERMISSION ENGINE
+// =====================================================
+const RBAC_ROLES = {
+  PLANNER_CHIEF: { name:'产线规划设计师', dept:'规划设计部', risk:'MEDIUM', color:'var(--secondary)' },
+  CHECKPOINT_APPROVER: { name:'检查点审核/授权人', dept:'管理层', risk:'HIGH', color:'var(--warning)' },
+  PROCESS_ENGINEER: { name:'工艺工程师', dept:'工艺部', risk:'MEDIUM', color:'var(--secondary)' },
+  LAYOUT_ENGINEER: { name:'布局工程师', dept:'规划设计部', risk:'MEDIUM', color:'var(--secondary)' },
+  SIM_ENGINEER: { name:'仿真工程师', dept:'工程部', risk:'MEDIUM', color:'var(--secondary)' },
+  PROJECT_MANAGER: { name:'项目经理/总工程师', dept:'管理层', risk:'CRITICAL', color:'var(--danger)' },
+  AUDITOR: { name:'合规审查员', dept:'合规部', risk:'LOW', color:'var(--success)' },
+  SYSTEM_ADMIN: { name:'系统管理员', dept:'IT', risk:'CRITICAL', color:'var(--danger)' },
+};
+const S1_PERMS = {
+  read: ['PLANNER_CHIEF','CHECKPOINT_APPROVER','PROCESS_ENGINEER','LAYOUT_ENGINEER','SIM_ENGINEER','PROJECT_MANAGER','AUDITOR','SYSTEM_ADMIN'],
+  write: ['PLANNER_CHIEF','CHECKPOINT_APPROVER','PROJECT_MANAGER','SYSTEM_ADMIN'],
+  sign_cp_a: ['CHECKPOINT_APPROVER','PROJECT_MANAGER','SYSTEM_ADMIN'],
+  invalidate_token: ['PROJECT_MANAGER','SYSTEM_ADMIN'],
+};
+let currentRole = 'PLANNER_CHIEF';
+
+function buildRoleDropdown() {
+  const dd = document.getElementById('roleDropdown');
+  dd.innerHTML = '<div class="rd-header">切换角色（演示）</div>' +
+    Object.entries(RBAC_ROLES).map(([k,v]) =>
+      `<div class="role-option ${k===currentRole?'active':''}" onclick="switchRole('${k}',event)">
+        <span class="ro-name">${v.name}</span>
+        <span class="ro-risk ${v.risk}">${v.risk}</span>
+        <span class="ro-dept">${v.dept}</span>
+      </div>`
+    ).join('');
+}
+
+function toggleRoleDropdown(e) {
+  e.stopPropagation();
+  const dd = document.getElementById('roleDropdown');
+  dd.classList.toggle('show');
+}
+document.addEventListener('click', () => { document.getElementById('roleDropdown').classList.remove('show'); });
+
+function switchRole(roleKey, e) {
+  e.stopPropagation();
+  currentRole = roleKey;
+  const r = RBAC_ROLES[roleKey];
+  document.getElementById('roleLabel').textContent = r.name;
+  const indicator = document.getElementById('roleIndicator');
+  indicator.style.color = r.color;
+  indicator.style.borderColor = r.color.replace(')', ',0.25)').replace('var(','rgba(');
+  document.getElementById('roleDropdown').classList.remove('show');
+  buildRoleDropdown();
+  applyRolePermissions();
+  showToast('info', '角色已切换', `当前角色: ${r.name} · ${r.dept} · 权限已刷新`);
+  addAuditEntry('system', 'ROLE_SWITCHED', `→ ${roleKey} (${r.name})`);
+}
+
+function applyRolePermissions() {
+  const canWrite = S1_PERMS.write.includes(currentRole);
+  const canSignCPA = S1_PERMS.sign_cp_a.includes(currentRole);
+  // Parse button
+  const btnParse = document.getElementById('btnParse');
+  if (canWrite) { btnParse.classList.remove('perm-denied'); btnParse.title = ''; }
+  else { btnParse.classList.add('perm-denied'); btnParse.title = '当前角色无 write 权限'; }
+  // CP-A button
+  const btnCPA = document.getElementById('btnCPA');
+  if (canSignCPA) { btnCPA.dataset.permDenied = 'false'; }
+  else { btnCPA.classList.add('perm-denied'); btnCPA.dataset.permDenied = 'true'; btnCPA.title = '仅 CHECKPOINT_APPROVER / PROJECT_MANAGER 可签发'; }
+  if (canSignCPA && btnCPA.classList.contains('perm-denied')) { btnCPA.classList.remove('perm-denied'); }
+  // Export button
+  const btns = document.querySelectorAll('.nav-btn.outline');
+  btns.forEach(b => {
+    if (b.textContent.includes('导出')) {
+      if (canWrite) b.classList.remove('perm-denied'); else b.classList.add('perm-denied');
+    }
+  });
+}
+
+// =====================================================
+// INIT
+// =====================================================
+window.addEventListener('resize', resizeCanvas);
+window.addEventListener('load', () => {
+  buildLayerTree();
+  buildCPAChecklist();
+  buildRoleDropdown();
+  applyRolePermissions();
+  resizeCanvas();
+});
+</script>
+</body>
+</html>
