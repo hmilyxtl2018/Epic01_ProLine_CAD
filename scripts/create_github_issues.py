@@ -696,29 +696,45 @@ PENDING → PARSE_RUNNING → CONSTRAINT_CHECKING → LAYOUT_OPTIMIZING → COMP
 
 
 def create_milestones(dry_run: bool = True) -> None:
-    """创建 GitHub Milestones。"""
+    """创建 GitHub Milestones（已通过 API 创建，此函数仅作展示）。"""
     for key, title in MILESTONES.items():
-        cmd = ["gh", "api", "repos/{owner}/{repo}/milestones", "-f", f"title={title}"]
         if dry_run:
             print(f"[DRY-RUN] 创建 Milestone: {title}")
         else:
             try:
                 subprocess.run(
-                    ["gh", "api", "-X", "POST", "repos/{owner}/{repo}/milestones",
+                    ["gh", "api", "-X", "POST", f"repos/{REPO}/milestones",
                      "-f", f"title={title}", "-f", "state=open"],
-                    check=True, capture_output=True, text=True
+                    check=True, capture_output=True, text=True, encoding="utf-8"
                 )
-                print(f"  ✅ Milestone 创建成功: {title}")
-            except subprocess.CalledProcessError as e:
-                print(f"  ⚠️  Milestone 可能已存在: {title} ({e.stderr.strip()})")
+                print(f"  OK Milestone: {title}")
+            except subprocess.CalledProcessError:
+                print(f"  SKIP Milestone (exists): {title}")
+
+
+REPO = "hmilyxtl2018/Epic01_ProLine_CAD"
+
+# Milestone 短名 → GitHub milestone 标题映射
+MILESTONE_TITLES = {
+    "M0": "M0: 项目准备与发现",
+    "M1": "M1: 基础设施与MCP Toolbelt",
+    "M2": "M2: ParseAgent",
+    "M3": "M3: ConstraintAgent",
+    "M4": "M4: LayoutAgent",
+    "M5": "M5: 编排+LLM+UI",
+    "M6": "M6: 测试+部署",
+}
 
 
 def create_issues(dry_run: bool = True) -> None:
-    """批量创建 GitHub Issues。"""
+    """批量创建 GitHub Issues（含 milestone 关联）。"""
     for i, issue in enumerate(ISSUES, 1):
         labels_args = []
         for label in issue.labels:
             labels_args.extend(["-l", label])
+
+        milestone_title = MILESTONE_TITLES.get(issue.milestone, "")
+        milestone_args = ["-m", milestone_title] if milestone_title else []
 
         if dry_run:
             print(f"[DRY-RUN] #{i:02d} [{issue.milestone}] {issue.title}")
@@ -726,15 +742,17 @@ def create_issues(dry_run: bool = True) -> None:
             try:
                 cmd = [
                     "gh", "issue", "create",
+                    "--repo", REPO,
                     "--title", issue.title,
                     "--body", issue.body,
                     *labels_args,
+                    *milestone_args,
                 ]
-                result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-                print(f"  ✅ #{i:02d} {issue.title}")
+                result = subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8")
+                print(f"  OK #{i:02d} {issue.title}")
                 print(f"     URL: {result.stdout.strip()}")
             except subprocess.CalledProcessError as e:
-                print(f"  ❌ #{i:02d} {issue.title} — {e.stderr.strip()}")
+                print(f"  FAIL #{i:02d} {issue.title} -- {e.stderr.strip()}")
 
 
 def main():
@@ -750,10 +768,10 @@ def main():
         print("  EXECUTE — 正在创建 GitHub Issues")
         print("=" * 60)
 
-    print(f"\n📋 Milestones ({len(MILESTONES)} 个):")
+    print(f"\n[Milestones] ({len(MILESTONES)} 个):")
     create_milestones(dry_run)
 
-    print(f"\n📝 Issues ({len(ISSUES)} 个):")
+    print(f"\n[Issues] ({len(ISSUES)} 个):")
     create_issues(dry_run)
 
     print(f"\n{'预览' if dry_run else '创建'}完成！")
