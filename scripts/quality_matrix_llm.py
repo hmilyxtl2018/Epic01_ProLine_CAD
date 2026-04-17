@@ -14,11 +14,17 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import statistics
 import sys
 import time
 from pathlib import Path
+
+# Windows 控制台默认 GBK,会对 emoji/bullet (•) 报 UnicodeEncodeError.强制 stdout 为 UTF-8.
+if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -66,6 +72,14 @@ def main():
     parser.add_argument(
         "--only", type=str, default="",
         help="仅评估 filename 子串匹配的文件（逗号分隔多项）",
+    )
+    parser.add_argument(
+        "--regression-threshold", type=float, default=0.0,
+        help="回归护栏: 若本次 overall < baseline 文件中对应 overall - 阈值, 退出码=1. 需配合 --baseline.",
+    )
+    parser.add_argument(
+        "--baseline", type=str, default="",
+        help="基线 matrix.json 路径 (用于 --regression-threshold 对比)",
     )
     args = parser.parse_args()
     runs = max(1, args.runs)
@@ -258,6 +272,35 @@ def main():
     out = out_path
     out.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\n结果已保存: {out.relative_to(PROJECT_ROOT)}")
+
+    # ── Regression guard ──
+    if args.regression_threshold > 0 and args.baseline:
+        baseline_path = Path(args.baseline)
+        if not baseline_path.is_absolute():
+            baseline_path = PROJECT_ROOT / baseline_path
+        if not baseline_path.exists():
+            print(f"\n警告: 基线文件不存在 {baseline_path}, 跳过回归检查")
+            return
+        try:
+            baseline_rows = json.loads(baseline_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            print(f"\n警告: 无法读取基线 ({exc}), 跳过回归检查")
+            return
+        base_map = {r["filename"]: r.get("overall", -1) for r in baseline_rows}
+        regressions = []
+        for r in rows:
+            cur = r.get("overall", -1)
+            base = base_map.get(r["filename"], -1)
+            if base > 0 and cur >= 0 and (base - cur) > args.regression_threshold:
+                regressions.append((r["filename"], base, cur, base - cur))
+        print(f"\n── 回归检查 (阈值 {args.regression_threshold}, 基线 {baseline_path.name}) ──")
+        if regressions:
+            print(f"  ✗ {len(regressions)} 个文件退步超阈值:")
+            for name, b, c, delta in regressions:
+                print(f"    - {name}: {b:.3f} → {c:.3f}  (Δ=-{delta:.3f})")
+            sys.exit(1)
+        else:
+            print(f"  ✓ 所有文件 overall 退步 ≤ {args.regression_threshold}")
 
 
 if __name__ == "__main__":
