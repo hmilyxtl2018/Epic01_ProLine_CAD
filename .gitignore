@@ -69,3 +69,11 @@ node_modules/
 *.key
 *.cert
 secrets/
+
+# ════════════════ Runtime artifacts ════════════════
+exp/
+tools/
+dump_*.txt
+*.log
+offload_temp/
+

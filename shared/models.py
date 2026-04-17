@@ -27,6 +27,14 @@ class AssetType(str, Enum):
     CONVEYOR = "Conveyor"
     LIFTING_POINT = "LiftingPoint"
     ZONE = "Zone"
+    WALL = "Wall"
+    DOOR = "Door"
+    PIPE = "Pipe"
+    COLUMN = "Column"
+    WINDOW = "Window"
+    CNC_MACHINE = "CncMachine"
+    ELECTRICAL_PANEL = "ElectricalPanel"
+    STORAGE_RACK = "StorageRack"
     OTHER = "Other"
 
 
@@ -44,6 +52,8 @@ class LinkType(str, Enum):
     PAIR_WITH = "PAIR_WITH"
     TRAVERSES = "TRAVERSES"
     LOCATED_IN = "LOCATED_IN"
+    LABELED_BY = "LABELED_BY"
+    CONTAINS = "CONTAINS"
 
 
 class CADFormat(str, Enum):
@@ -109,6 +119,9 @@ class Asset(BaseModel):
     ports: list[Port] = Field(default_factory=list)
     confidence: float = Field(ge=0.0, le=1.0, default=0.0)
     layer: str = ""
+    label: str = ""
+    block_name: str = ""
+    coord_source: str = ""  # "insert" | "start" | "centroid" | "" (=default origin)
 
 
 class OntologyLink(BaseModel):
