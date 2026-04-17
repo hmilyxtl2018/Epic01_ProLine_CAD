@@ -1,0 +1,310 @@
+# ParseAgent Gold Annotation — 20180109_机加车间平面布局图.dwg
+# 人工标注 (2026-04-17), 基于对源 DWG 的 block 名语义审阅.
+# 用途: 作为 classification precision/recall 的客观锚点.
+# 评测工具: scripts/gold_eval.py
+
+filename: 20180109_机加车间平面布局图.dwg
+annotator: copilot-review-2026-04-17
+domain: 发动机机加车间 (engine machining line)
+total_insert_entities: 506
+total_entities: 704
+
+# ══════════════════════════════════════════════════════════════════
+#  块名 → 期望类型 (primary signal)
+#  type:  Conveyor | Equipment | LiftingPoint | Zone | Wall | Door |
+#         Window | Column | Pipe | Annotation | Other
+#  subtype: 可选细分 (Phase 5 目标)
+#  confidence_min: 该块应达到的最低 confidence (0-1)
+#  acceptable_alt: 可接受的替代类型 (若 Phase 4 parser 暂不区分)
+# ══════════════════════════════════════════════════════════════════
+block_annotations:
+  # ── 物流传送 (Conveyor) ──
+  Conveyor_2m:
+    expected_type: Conveyor
+    subtype: PalletConveyor
+    count: 261
+    notes: "2m 节距板链输送机,STEP_1 层主线"
+    confidence_min: 0.6
+
+  辊道-1米:
+    expected_type: Conveyor
+    subtype: RollerConveyor
+    count: 3
+    notes: "1m 辊道"
+    confidence_min: 0.6
+
+  # ── 起重 (LiftingPoint) ──
+  Hoist 4x5m:
+    expected_type: LiftingPoint
+    subtype: Hoist
+    count: 3
+    notes: "4×5m 电葫芦"
+    confidence_min: 0.6
+
+  KBK-缸体线:
+    expected_type: LiftingPoint
+    subtype: KBKRail
+    count: 2
+    notes: "KBK 柔性悬挂起重轨道"
+    acceptable_alt: [Equipment]  # 当前 parser 无此类型,Phase 5 目标
+
+  # ── 清洗设备 ──
+  工艺缸盖清洗机:
+    expected_type: Equipment
+    subtype: WashingMachine
+    count: 7
+    confidence_min: 0.5
+
+  清洗机_现代:
+    expected_type: Equipment
+    subtype: WashingMachine
+    count: 6
+    confidence_min: 0.5
+
+  清洗机--中船:
+    expected_type: Equipment
+    subtype: WashingMachine
+    count: 2
+    confidence_min: 0.5
+
+  Final Washing_CS:
+    expected_type: Equipment
+    subtype: WashingMachine
+    count: 1
+    confidence_min: 0.5
+
+  # ── 机加工设备 ──
+  珩磨机:
+    expected_type: Equipment
+    subtype: HoningMachine
+    count: 6
+    confidence_min: 0.5
+
+  CNC:
+    expected_type: Equipment
+    subtype: CNCMachine
+    count: 2
+    confidence_min: 0.5
+
+  Grinder_Landis:
+    expected_type: Equipment
+    subtype: Grinder
+    count: 1
+    confidence_min: 0.5
+
+  抛光机-GRANDMASTER:
+    expected_type: Equipment
+    subtype: Polisher
+    count: 1
+    confidence_min: 0.5
+
+  Deep Rolling:
+    expected_type: Equipment
+    subtype: DeepRollingMachine
+    count: 1
+    confidence_min: 0.5
+
+  EXTAR-70A:
+    expected_type: Equipment
+    subtype: MachiningCenter
+    count: 1
+    confidence_min: 0.4
+
+  HARDING-EFD:
+    expected_type: Equipment
+    subtype: InductionHardener
+    count: 1
+    confidence_min: 0.4
+
+  # ── 装配 / 压装 ──
+  缸盖罩装配:
+    expected_type: Equipment
+    subtype: AssemblyStation
+    count: 4
+    confidence_min: 0.5
+
+  碗形塞压装:
+    expected_type: Equipment
+    subtype: PressStation
+    count: 4
+    confidence_min: 0.5
+
+  堵头装配:
+    expected_type: Equipment
+    subtype: AssemblyStation
+    count: 4
+    confidence_min: 0.5
+
+  轴承盖装配:
+    expected_type: Equipment
+    subtype: AssemblyStation
+    count: 2
+    confidence_min: 0.5
+
+  # ── 测试 / 测量 ──
+  CH_MID_LEAK TEST:
+    expected_type: Equipment
+    subtype: LeakTestStation
+    count: 9
+    confidence_min: 0.5
+
+  缸孔分组测量:
+    expected_type: Equipment
+    subtype: InspectionStation
+    count: 2
+    confidence_min: 0.5
+
+  # ── 拆卸 ──
+  工艺缸盖拆卸:
+    expected_type: Equipment
+    subtype: DisassemblyStation
+    count: 2
+    confidence_min: 0.5
+
+  # ── 具名工序机台 (OPxxx) ──
+  NSI-OP020:
+    expected_type: Equipment
+    subtype: ProcessMachine
+    count: 3
+    confidence_min: 0.4
+    notes: "NSI 设备 OP020 工序"
+
+  op170e:
+    expected_type: Equipment
+    subtype: ProcessMachine
+    count: 2
+    confidence_min: 0.4
+
+  op20c:
+    expected_type: Equipment
+    subtype: ProcessMachine
+    count: 1
+    confidence_min: 0.4
+
+  op180:
+    expected_type: Equipment
+    subtype: ProcessMachine
+    count: 1
+    confidence_min: 0.4
+
+  # ── 工作台 / 物流辅助 ──
+  K-ST-2100x1400:
+    expected_type: Equipment
+    subtype: Workstation
+    count: 22
+    notes: "2100×1400mm 规格工作台"
+    acceptable_alt: [Other]  # 无块属性时降级可接受
+    confidence_min: 0.35
+
+  托盘:
+    expected_type: Equipment
+    subtype: Pallet
+    count: 20
+    notes: "料盘 — 严格说是 MaterialHandling,归 Equipment 可接受"
+    acceptable_alt: [Other]
+    confidence_min: 0.3
+
+  # ── 图签 / 标题块 ──
+  机加车间平面图:
+    expected_type: Annotation
+    subtype: TitleBlock
+    count: 2
+    acceptable_alt: [Other]  # 当前 parser 无 Annotation 类型
+    confidence_min: 0.2
+
+  # ── 匿名 Autodesk 复制块 (Gold 标 Ambiguous,不算错分) ──
+  A$C74181755:
+    expected_type: Ambiguous
+    count: 99
+    notes: "匿名 Autodesk 块,多实例,可能是 fixture 或重复 workpiece.任何类型 + 低 confidence 均可接受."
+    acceptable_alt: [Other, Equipment]
+
+  A$C780A28C5:
+    expected_type: Ambiguous
+    count: 28
+    notes: "AM_0 层匿名块"
+    acceptable_alt: [Other]
+
+  A$C4CA7697B:
+    expected_type: Ambiguous
+    count: 2
+    acceptable_alt: [Other]
+
+  A$C4BFB7375:
+    expected_type: Ambiguous
+    count: 1
+    acceptable_alt: [Other]
+
+# ══════════════════════════════════════════════════════════════════
+#  图层级期望 (secondary signal, 用于层映射优化评估)
+# ══════════════════════════════════════════════════════════════════
+layer_annotations:
+  STEP_1:
+    dominant_type: Conveyor
+    count: 261
+    notes: "整层都是 Conveyor_2m"
+    expected_purity: 0.98  # 允许极少噪声
+
+  AM_0:
+    dominant_type: Other  # 含匿名 + Hoist, 分布混杂
+    count: 33
+    notes: "AutoCAD Mechanical 默认层, 含 3 个 Hoist 不可误过滤"
+    expected_purity: 0.3   # 熵较高
+
+  "0":
+    dominant_type: Equipment
+    count: 351
+    notes: "主图层 — 大量具名设备 + 文字标注 + 几何"
+    expected_purity: 0.4
+
+  ____:
+    dominant_type: Other
+    count: 48
+    notes: "纯几何 LINE/LWPOLYLINE, 无业务语义"
+    expected_purity: 0.9  # 几乎全是同一类
+
+  _0:
+    dominant_type: Equipment
+    count: 4
+    notes: "4 个 CNC/op20c/op170e/op180"
+
+# ══════════════════════════════════════════════════════════════════
+#  整体类型分布期望 (aggregate)
+#  说明: min/max 是允许范围; 当前 Phase 4 parser 能达到的合理目标.
+# ══════════════════════════════════════════════════════════════════
+expected_type_counts:
+  Conveyor: { min: 262, max: 268 }   # 261 Conveyor_2m + 3 辊道 ≈ 264
+  LiftingPoint: { min: 3, max: 5 }   # 3 Hoist (+ 2 KBK 为 Phase 5 目标)
+  Equipment: { min: 60, max: 130 }   # 所有具名设备 + 工作台 + 托盘
+  Zone: { min: 0, max: 30 }          # 当前仅 closed LWPOLYLINE→Zone 和 HATCH, 厂区边界
+  Other: { min: 100, max: 300 }      # 文本 + 匿名 + 纯几何
+  # Phase 5 新类 (当前为 0, 未来目标)
+  Annotation: { min: 0, max: 100 }   # 86 MTEXT → Annotation 后应命中
+
+# ══════════════════════════════════════════════════════════════════
+#  链接数期望 (semantic_richness 锚)
+# ══════════════════════════════════════════════════════════════════
+expected_link_counts:
+  FEEDS: { min: 250, max: 400 }       # Conveyor 链 (261 个 Conveyor_2m 应串联)
+  LOCATED_IN: { min: 10, max: 200 }   # Equipment 空间归属
+  LABELED_BY: { min: 10, max: 100 }   # MTEXT 标签 (当前 18, 目标 >30)
+  NEAR_BY: { min: 0, max: 500 }
+
+# ══════════════════════════════════════════════════════════════════
+#  已知 Bug / 容忍
+# ══════════════════════════════════════════════════════════════════
+known_issues:
+  - id: coord_scale_outlier
+    desc: "261 个 Conveyor_2m 坐标量级 ~1e9 (异常放大 ~1e5 倍),疑似 block 变换 bug"
+    severity: high
+    phase5_target: true
+
+  - id: subtype_missing
+    desc: "20+ 种 block 应映射到 Equipment 子类型 (CNC/Grinder/Hoist 等)"
+    severity: medium
+    phase5_target: true
+
+  - id: annotation_absent
+    desc: "86 MTEXT + 9 DIMENSION 应归 Annotation 而非 Other"
+    severity: low
+    phase5_target: true

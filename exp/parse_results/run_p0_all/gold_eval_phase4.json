@@ -1,0 +1,755 @@
+{
+  "meta": {
+    "gold_file": "jijia_gold.yaml",
+    "site_model": "exp\\parse_results\\run_p0_all\\66861c26\\site_model.json",
+    "cad_source": {
+      "filename": "20180109_机加车间平面布局图.dwg",
+      "sha256": "66861c266d9f99d760728f57d82983072eaf29956740cc0ed58ed321ca583a7d",
+      "format": "DWG",
+      "coord_system": "WCS",
+      "import_timestamp": "2026-04-17T03:59:51.917300"
+    },
+    "total_assets": 704,
+    "total_links": 382,
+    "gold_filename": "20180109_机加车间平面布局图.dwg"
+  },
+  "classification": {
+    "scored_instances": 376,
+    "strict_accuracy": 0.9175531914893617,
+    "loose_accuracy": 0.976063829787234,
+    "low_confidence_rate": 0.0,
+    "per_type": {
+      "Annotation": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 2,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "Conveyor": {
+        "tp": 264,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "Equipment": {
+        "tp": 78,
+        "fp": 2,
+        "fn": 27,
+        "precision": 0.975,
+        "recall": 0.7429,
+        "f1": 0.8432
+      },
+      "LiftingPoint": {
+        "tp": 3,
+        "fp": 0,
+        "fn": 2,
+        "precision": 1.0,
+        "recall": 0.6,
+        "f1": 0.75
+      },
+      "Other": {
+        "tp": 0,
+        "fp": 29,
+        "fn": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      }
+    },
+    "macro_f1": 0.5186,
+    "block_details": [
+      {
+        "block": "Conveyor_2m",
+        "expected_type": "Conveyor",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Conveyor": 261
+        },
+        "count_actual": 261,
+        "count_expected": 261,
+        "count_ok": true,
+        "strict_hits": 261,
+        "loose_hits": 261,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "辊道-1米",
+        "expected_type": "Conveyor",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Conveyor": 3
+        },
+        "count_actual": 3,
+        "count_expected": 3,
+        "count_ok": true,
+        "strict_hits": 3,
+        "loose_hits": 3,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "Hoist 4x5m",
+        "expected_type": "LiftingPoint",
+        "acceptable_alt": [],
+        "actual_types": {
+          "LiftingPoint": 3
+        },
+        "count_actual": 3,
+        "count_expected": 3,
+        "count_ok": true,
+        "strict_hits": 3,
+        "loose_hits": 3,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "KBK-缸体线",
+        "expected_type": "LiftingPoint",
+        "acceptable_alt": [
+          "Equipment"
+        ],
+        "actual_types": {
+          "Other": 2
+        },
+        "count_actual": 2,
+        "count_expected": 2,
+        "count_ok": true,
+        "strict_hits": 0,
+        "loose_hits": 0,
+        "strict_accuracy": 0.0,
+        "loose_accuracy": 0.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "工艺缸盖清洗机",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Equipment": 7
+        },
+        "count_actual": 7,
+        "count_expected": 7,
+        "count_ok": true,
+        "strict_hits": 7,
+        "loose_hits": 7,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "清洗机_现代",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Equipment": 6
+        },
+        "count_actual": 6,
+        "count_expected": 6,
+        "count_ok": true,
+        "strict_hits": 6,
+        "loose_hits": 6,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "清洗机--中船",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Equipment": 2
+        },
+        "count_actual": 2,
+        "count_expected": 2,
+        "count_ok": true,
+        "strict_hits": 2,
+        "loose_hits": 2,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "Final Washing_CS",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Other": 1
+        },
+        "count_actual": 1,
+        "count_expected": 1,
+        "count_ok": true,
+        "strict_hits": 0,
+        "loose_hits": 0,
+        "strict_accuracy": 0.0,
+        "loose_accuracy": 0.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "珩磨机",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Equipment": 6
+        },
+        "count_actual": 6,
+        "count_expected": 6,
+        "count_ok": true,
+        "strict_hits": 6,
+        "loose_hits": 6,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "CNC",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Equipment": 2
+        },
+        "count_actual": 2,
+        "count_expected": 2,
+        "count_ok": true,
+        "strict_hits": 2,
+        "loose_hits": 2,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "Grinder_Landis",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Other": 1
+        },
+        "count_actual": 1,
+        "count_expected": 1,
+        "count_ok": true,
+        "strict_hits": 0,
+        "loose_hits": 0,
+        "strict_accuracy": 0.0,
+        "loose_accuracy": 0.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "抛光机-GRANDMASTER",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Equipment": 1
+        },
+        "count_actual": 1,
+        "count_expected": 1,
+        "count_ok": true,
+        "strict_hits": 1,
+        "loose_hits": 1,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "Deep Rolling",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Other": 1
+        },
+        "count_actual": 1,
+        "count_expected": 1,
+        "count_ok": true,
+        "strict_hits": 0,
+        "loose_hits": 0,
+        "strict_accuracy": 0.0,
+        "loose_accuracy": 0.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "EXTAR-70A",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Other": 1
+        },
+        "count_actual": 1,
+        "count_expected": 1,
+        "count_ok": true,
+        "strict_hits": 0,
+        "loose_hits": 0,
+        "strict_accuracy": 0.0,
+        "loose_accuracy": 0.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "HARDING-EFD",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Other": 1
+        },
+        "count_actual": 1,
+        "count_expected": 1,
+        "count_ok": true,
+        "strict_hits": 0,
+        "loose_hits": 0,
+        "strict_accuracy": 0.0,
+        "loose_accuracy": 0.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "缸盖罩装配",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Equipment": 4
+        },
+        "count_actual": 4,
+        "count_expected": 4,
+        "count_ok": true,
+        "strict_hits": 4,
+        "loose_hits": 4,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "碗形塞压装",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Equipment": 4
+        },
+        "count_actual": 4,
+        "count_expected": 4,
+        "count_ok": true,
+        "strict_hits": 4,
+        "loose_hits": 4,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "堵头装配",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Equipment": 4
+        },
+        "count_actual": 4,
+        "count_expected": 4,
+        "count_ok": true,
+        "strict_hits": 4,
+        "loose_hits": 4,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "轴承盖装配",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Equipment": 2
+        },
+        "count_actual": 2,
+        "count_expected": 2,
+        "count_ok": true,
+        "strict_hits": 2,
+        "loose_hits": 2,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "CH_MID_LEAK TEST",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Equipment": 9
+        },
+        "count_actual": 9,
+        "count_expected": 9,
+        "count_ok": true,
+        "strict_hits": 9,
+        "loose_hits": 9,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "缸孔分组测量",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Equipment": 2
+        },
+        "count_actual": 2,
+        "count_expected": 2,
+        "count_ok": true,
+        "strict_hits": 2,
+        "loose_hits": 2,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "工艺缸盖拆卸",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Equipment": 2
+        },
+        "count_actual": 2,
+        "count_expected": 2,
+        "count_ok": true,
+        "strict_hits": 2,
+        "loose_hits": 2,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "NSI-OP020",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Equipment": 3
+        },
+        "count_actual": 3,
+        "count_expected": 3,
+        "count_ok": true,
+        "strict_hits": 3,
+        "loose_hits": 3,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "op170e",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Equipment": 2
+        },
+        "count_actual": 2,
+        "count_expected": 2,
+        "count_ok": true,
+        "strict_hits": 2,
+        "loose_hits": 2,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "op20c",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Equipment": 1
+        },
+        "count_actual": 1,
+        "count_expected": 1,
+        "count_ok": true,
+        "strict_hits": 1,
+        "loose_hits": 1,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "op180",
+        "expected_type": "Equipment",
+        "acceptable_alt": [],
+        "actual_types": {
+          "Equipment": 1
+        },
+        "count_actual": 1,
+        "count_expected": 1,
+        "count_ok": true,
+        "strict_hits": 1,
+        "loose_hits": 1,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "K-ST-2100x1400",
+        "expected_type": "Equipment",
+        "acceptable_alt": [
+          "Other"
+        ],
+        "actual_types": {
+          "Other": 22
+        },
+        "count_actual": 22,
+        "count_expected": 22,
+        "count_ok": true,
+        "strict_hits": 0,
+        "loose_hits": 22,
+        "strict_accuracy": 0.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "托盘",
+        "expected_type": "Equipment",
+        "acceptable_alt": [
+          "Other"
+        ],
+        "actual_types": {
+          "Equipment": 20
+        },
+        "count_actual": 20,
+        "count_expected": 20,
+        "count_ok": true,
+        "strict_hits": 20,
+        "loose_hits": 20,
+        "strict_accuracy": 1.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "机加车间平面图",
+        "expected_type": "Annotation",
+        "acceptable_alt": [
+          "Other"
+        ],
+        "actual_types": {
+          "Equipment": 2
+        },
+        "count_actual": 2,
+        "count_expected": 2,
+        "count_ok": true,
+        "strict_hits": 0,
+        "loose_hits": 0,
+        "strict_accuracy": 0.0,
+        "loose_accuracy": 0.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "A$C74181755",
+        "expected_type": "Ambiguous",
+        "acceptable_alt": [
+          "Equipment",
+          "Other"
+        ],
+        "actual_types": {
+          "Other": 99
+        },
+        "count_actual": 99,
+        "count_expected": 99,
+        "count_ok": true,
+        "strict_hits": 0,
+        "loose_hits": 99,
+        "strict_accuracy": 0.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "A$C780A28C5",
+        "expected_type": "Ambiguous",
+        "acceptable_alt": [
+          "Other"
+        ],
+        "actual_types": {
+          "Other": 28
+        },
+        "count_actual": 28,
+        "count_expected": 28,
+        "count_ok": true,
+        "strict_hits": 0,
+        "loose_hits": 28,
+        "strict_accuracy": 0.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "A$C4CA7697B",
+        "expected_type": "Ambiguous",
+        "acceptable_alt": [
+          "Other"
+        ],
+        "actual_types": {
+          "Other": 2
+        },
+        "count_actual": 2,
+        "count_expected": 2,
+        "count_ok": true,
+        "strict_hits": 0,
+        "loose_hits": 2,
+        "strict_accuracy": 0.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      },
+      {
+        "block": "A$C4BFB7375",
+        "expected_type": "Ambiguous",
+        "acceptable_alt": [
+          "Other"
+        ],
+        "actual_types": {
+          "Other": 1
+        },
+        "count_actual": 1,
+        "count_expected": 1,
+        "count_ok": true,
+        "strict_hits": 0,
+        "loose_hits": 1,
+        "strict_accuracy": 0.0,
+        "loose_accuracy": 1.0,
+        "low_confidence_count": 0
+      }
+    ]
+  },
+  "aggregate_ranges": {
+    "per_type": {
+      "Conveyor": {
+        "actual": 264,
+        "min": 262,
+        "max": 268,
+        "in_range": true
+      },
+      "LiftingPoint": {
+        "actual": 3,
+        "min": 3,
+        "max": 5,
+        "in_range": true
+      },
+      "Equipment": {
+        "actual": 80,
+        "min": 60,
+        "max": 130,
+        "in_range": true
+      },
+      "Zone": {
+        "actual": 15,
+        "min": 0,
+        "max": 30,
+        "in_range": true
+      },
+      "Other": {
+        "actual": 342,
+        "min": 100,
+        "max": 300,
+        "in_range": false
+      },
+      "Annotation": {
+        "actual": 0,
+        "min": 0,
+        "max": 100,
+        "in_range": true
+      }
+    },
+    "pass_rate": 0.8333333333333334,
+    "actual_counts": {
+      "Other": 342,
+      "Equipment": 80,
+      "Conveyor": 264,
+      "LiftingPoint": 3,
+      "Zone": 15
+    }
+  },
+  "link_ranges": {
+    "per_type": {
+      "FEEDS": {
+        "actual": 346,
+        "min": 250,
+        "max": 400,
+        "in_range": true
+      },
+      "LOCATED_IN": {
+        "actual": 18,
+        "min": 10,
+        "max": 200,
+        "in_range": true
+      },
+      "LABELED_BY": {
+        "actual": 18,
+        "min": 10,
+        "max": 100,
+        "in_range": true
+      },
+      "NEAR_BY": {
+        "actual": 0,
+        "min": 0,
+        "max": 500,
+        "in_range": true
+      }
+    },
+    "pass_rate": 1.0,
+    "actual_counts": {
+      "LOCATED_IN": 18,
+      "FEEDS": 346,
+      "LABELED_BY": 18
+    }
+  },
+  "layer_annotations": {
+    "per_layer": {
+      "STEP_1": {
+        "present": true,
+        "dominant_expected": "Conveyor",
+        "dominant_actual": "Conveyor",
+        "purity": 1.0,
+        "purity_min": 0.98,
+        "dominant_ok": true,
+        "purity_ok": true,
+        "ok": true,
+        "count": 261
+      },
+      "AM_0": {
+        "present": true,
+        "dominant_expected": "Other",
+        "dominant_actual": "Other",
+        "purity": 0.909,
+        "purity_min": 0.3,
+        "dominant_ok": true,
+        "purity_ok": true,
+        "ok": true,
+        "count": 33
+      },
+      "0": {
+        "present": true,
+        "dominant_expected": "Equipment",
+        "dominant_actual": "Other",
+        "purity": 0.738,
+        "purity_min": 0.4,
+        "dominant_ok": false,
+        "purity_ok": true,
+        "ok": false,
+        "count": 351
+      },
+      "____": {
+        "present": true,
+        "dominant_expected": "Other",
+        "dominant_actual": "Other",
+        "purity": 1.0,
+        "purity_min": 0.9,
+        "dominant_ok": true,
+        "purity_ok": true,
+        "ok": true,
+        "count": 48
+      },
+      "_0": {
+        "present": true,
+        "dominant_expected": "Equipment",
+        "dominant_actual": "Equipment",
+        "purity": 1.0,
+        "purity_min": 0.0,
+        "dominant_ok": true,
+        "purity_ok": true,
+        "ok": true,
+        "count": 4
+      }
+    },
+    "pass_rate": 0.8
+  },
+  "gold_score": 0.8267
+}
