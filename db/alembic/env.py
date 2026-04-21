@@ -27,7 +27,14 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 _DEFAULT_LOCAL_DSN = "postgresql+psycopg2://proline:proline@localhost:5432/proline_cad"
-_dsn = os.environ.get("POSTGRES_DSN", _DEFAULT_LOCAL_DSN)
+# Prefer MIGRATION_DSN (a DDL-privileged login, e.g. proline_migrator in prod)
+# over the application DSN (POSTGRES_DSN, the runtime login that SET LOCAL ROLE
+# switches into app_*). In dev they collapse to the same value via fallback.
+_dsn = (
+    os.environ.get("MIGRATION_DSN")
+    or os.environ.get("POSTGRES_DSN")
+    or _DEFAULT_LOCAL_DSN
+)
 config.set_main_option("sqlalchemy.url", _dsn)
 
 

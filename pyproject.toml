@@ -89,6 +89,8 @@ dashboard = [
     "python-magic>=0.4.27; platform_system != 'Windows'",
     # M2 JWT auth
     "python-jose[cryptography]>=3.3.0",
+    # Pydantic EmailStr validator (used by app/schemas/auth.py)
+    "email-validator>=2.0.0",
 ]
 
 # 开发工具

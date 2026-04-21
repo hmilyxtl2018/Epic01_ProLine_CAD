@@ -16,7 +16,10 @@ venv/
 ENV/
 
 # ════════════════ IDE / Editor ════════════════
-.vscode/
+# Ignore per-user VS Code state but keep shared workspace files committed.
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
 .idea/
 *.swp
 *.swo
