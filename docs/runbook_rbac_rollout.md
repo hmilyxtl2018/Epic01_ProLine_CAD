@@ -1,8 +1,12 @@
 # Runbook — RBAC + RLS Production Rollout (Phase E2)
 
-**Status:** Draft — pending change window  
-**Window:** **TBD** (insert UTC date/time once approved by ops)  
-**Estimated execution time:** 5–10 min DDL + 5 min smoke verification  
+**Status:** Draft — pending ops approval  
+**Window:** **2026-04-26 (Sun) 02:00 UTC** (= 北京时间 10:00) — primary  
+**Fallback windows:** 2026-04-29 18:00 UTC · 2026-05-03 02:00 UTC  
+**Duration:** 60 min (10 min DDL + 20 min smoke + 30 min observation)  
+**Freeze:** no other deploys 2026-04-26 00:00 UTC → 2026-04-27 00:00 UTC  
+**On-call:** `<backend: TBD>` + `<DBA: TBD>` (fill before approval)  
+**Backup:** snapshot at 2026-04-26 01:30 UTC, retention 7d  
 **Blast radius:** dashboard read/write paths (audit_log_actions, mcp_contexts)  
 **Owner:** backend / platform
 
@@ -166,7 +170,7 @@ GRANT app_viewer, app_operator, app_reviewer, app_admin TO <correct_login>;
 
 ## 6. Decision points still open
 
-- **Window date** — replace `TBD` in the header once ops approves.
+- **On-call names** — replace `<TBD>` placeholders in the header once ops confirms.
 - **Migrator vs app login**: If prod currently uses one superuser for both
   DDL and runtime, **do not deploy this rollout** until split. The whole
   point of 0010 is gone otherwise.
