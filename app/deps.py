@@ -16,6 +16,7 @@ import os
 from typing import Iterable, Iterator
 
 from fastapi import Depends, Header, status
+from fastapi import Request
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -166,6 +167,7 @@ class CurrentUser:
 
 
 def get_current_user(
+    request: Request,
     x_role: str | None = Header(default=None, alias="X-Role"),
     x_actor: str | None = Header(default=None, alias="X-Actor"),
     authorization: str | None = Header(default=None, alias="Authorization"),
@@ -174,10 +176,12 @@ def get_current_user(
 
     Precedence:
       1. `Authorization: Bearer <jwt>` -> claims override headers entirely.
-      2. `X-Role` / `X-Actor` -- legacy M1 trust-the-header path. Kept on so
+      2. `proline_session` cookie + `X-CSRF-Token` (state-changing methods
+         only) -> claims used; CSRF mismatch -> 403.
+      3. `X-Role` / `X-Actor` -- legacy M1 trust-the-header path. Kept on so
          existing tests and internal tooling keep working through M2.
     """
-    # 1. JWT path
+    # 1. JWT path (Authorization header)
     if authorization and authorization.lower().startswith("bearer "):
         from app.security.auth import AuthError, decode_token
 
@@ -196,6 +200,46 @@ def get_current_user(
                 message=f"Token role '{claims.role}' is not a known role.",
                 status_code=status.HTTP_401_UNAUTHORIZED,
             )
+        return CurrentUser(role=claims.role, actor=claims.sub[:200])
+
+    # 2. Cookie session path
+    cookie_token = request.cookies.get("proline_session")
+    if cookie_token:
+        from app.security.auth import AuthError, decode_token
+        from app.security.cookies import CSRF_COOKIE, CSRF_HEADER, verify_csrf_token
+
+        try:
+            claims = decode_token(cookie_token)
+        except AuthError as e:
+            raise AppError(
+                error_code="UNAUTHORIZED",
+                message=e.message,
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            ) from e
+        if claims.role not in ROLES:
+            raise AppError(
+                error_code="UNAUTHORIZED",
+                message=f"Token role '{claims.role}' is not a known role.",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+        # CSRF check: required for state-changing methods. Safe methods
+        # (GET/HEAD/OPTIONS) are exempt -- same-origin policy + SameSite=Lax
+        # already protects them from cross-site reads.
+        if request.method.upper() not in ("GET", "HEAD", "OPTIONS"):
+            csrf_cookie = request.cookies.get(CSRF_COOKIE, "")
+            csrf_header = request.headers.get(CSRF_HEADER, "")
+            if not csrf_cookie or csrf_cookie != csrf_header:
+                raise AppError(
+                    error_code="FORBIDDEN",
+                    message="CSRF token missing or mismatched.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+            if not verify_csrf_token(csrf_cookie, claims.sub):
+                raise AppError(
+                    error_code="FORBIDDEN",
+                    message="CSRF token failed signature verification.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
         return CurrentUser(role=claims.role, actor=claims.sub[:200])
 
     # 2. Legacy header path
