@@ -79,3 +79,44 @@ export interface WsNotFoundFrame {
 }
 
 export type WsRunFrame = WsStatusFrame | WsNotFoundFrame;
+
+// ── Quarantine ────────────────────────────────────────────────────────
+
+export type QuarantineDecision = "approve" | "reject" | "merge";
+
+export interface QuarantineItem {
+  id: string;
+  term_normalized: string;
+  term_display: string;
+  asset_type: string;
+  count: number;
+  evidence: unknown[];
+  first_seen: string;
+  last_seen: string;
+  decision: string | null;
+  reviewer: string | null;
+  reviewed_at: string | null;
+  merge_target_id: string | null;
+  mcp_context_id: string | null;
+  created_at: string;
+}
+
+export interface QuarantineListResponse {
+  items: QuarantineItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface QuarantineDecideRequest {
+  decision: QuarantineDecision;
+  merge_target_id?: string | null;
+  reason?: string | null;
+}
+
+export interface QuarantineDecideResponse {
+  id: string;
+  decision: string;
+  reviewer: string;
+  reviewed_at: string;
+}

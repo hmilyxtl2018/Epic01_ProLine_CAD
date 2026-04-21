@@ -27,6 +27,9 @@ export default function RootLayout({
                 <Link href="/runs" className="hover:underline">
                   Runs
                 </Link>
+                <Link href="/quarantine" className="hover:underline">
+                  Quarantine
+                </Link>
                 <RoleSwitcher />
               </nav>
             </div>

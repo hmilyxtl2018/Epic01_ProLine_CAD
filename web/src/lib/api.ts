@@ -106,6 +106,9 @@ import type {
   AuthIdentity,
   LoginCookieRequest,
   LoginCookieResponse,
+  QuarantineDecideRequest,
+  QuarantineDecideResponse,
+  QuarantineListResponse,
   RunCreatedResponse,
   RunDetail,
   RunListResponse,
@@ -123,6 +126,25 @@ export const api = {
       body: fd,
     });
   },
+  listQuarantine: (
+    opts: { page?: number; pageSize?: number; status?: string; assetType?: string } = {},
+  ) => {
+    const p = new URLSearchParams();
+    p.set("page", String(opts.page ?? 1));
+    p.set("page_size", String(opts.pageSize ?? 20));
+    if (opts.status) p.set("status", opts.status);
+    if (opts.assetType) p.set("asset_type", opts.assetType);
+    return request<QuarantineListResponse>(`/dashboard/quarantine?${p.toString()}`);
+  },
+  decideQuarantine: (id: string, body: QuarantineDecideRequest) =>
+    request<QuarantineDecideResponse>(
+      `/dashboard/quarantine/${encodeURIComponent(id)}/decide`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json" },
+      },
+    ),
 };
 
 export const auth = {
