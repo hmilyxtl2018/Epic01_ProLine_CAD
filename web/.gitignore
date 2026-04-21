@@ -3,3 +3,10 @@ node_modules
 out
 .env.local
 *.tsbuildinfo
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+# Vitest
+coverage/
