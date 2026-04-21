@@ -51,17 +51,30 @@ _ODA_EXE = Path(__file__).resolve().parents[2] / "tools" / "ODAFileConverter" / 
 _BLOCK_ASSET_PATTERNS: dict[AssetType, list[str]] = {
     AssetType.CONVEYOR: [
         "conveyor", "辊道", "输送", "roller", "belt", "chain",
+        # ── S1-T1: jijia gold 高频词 ──
+        "pallet_conveyor", "rollerconveyor", "板链",
     ],
     AssetType.EQUIPMENT: [
         "cnc", "machine", "机", "清洗", "装配", "压装", "测量", "珩磨",
         "test", "station", "press", "drill", "lathe", "mill",
         "op", "nsi", "托盘", "拆卸", "分组",
+        # ── S1-T1: jijia gold 高频词 ──
+        "washing", "honing", "grinder", "polish", "抛光",
+        "deep rolling", "extar", "harding", "landis",
+        "hardener", "harden", "leak", "inspection",
+        "process_machine", "workstation", "k-st",
+        "缸盖", "缸孔", "缸体", "工艺", "罩",
+        "assembly", "disassembly", "machining_center",
     ],
     AssetType.LIFTING_POINT: [
         "hoist", "crane", "吊", "lift", "天车", "行车",
+        # ── S1-T1: jijia gold 高频词 ──
+        "kbk", "悬挂", "葫芦",
     ],
     AssetType.ZONE: [
         "zone", "area", "区域", "room", "boundary", "围栏",
+        # ── S1-T1: jijia gold 高频词 ──
+        "厂区", "车间", "区",
     ],
     AssetType.WALL: [
         "wall", "mauer", "стена", "muro", "sciany",
@@ -134,9 +147,9 @@ _LAYER_ASSET_MAP: dict[str, AssetType] = {
     "FURN_EQ": AssetType.EQUIPMENT,
     "FURN": AssetType.EQUIPMENT,
     "FURNITURE": AssetType.EQUIPMENT,
-    "DIM": AssetType.OTHER,
-    "TXT": AssetType.OTHER,
-    "ANNOTATION": AssetType.OTHER,
+    "DIM": AssetType.ANNOTATION,
+    "TXT": AssetType.ANNOTATION,
+    "ANNOTATION": AssetType.ANNOTATION,
     "HATCH": AssetType.OTHER,
     "DEFPOINTS": AssetType.OTHER,
     "AIR": AssetType.PIPE,
@@ -144,6 +157,10 @@ _LAYER_ASSET_MAP: dict[str, AssetType] = {
     "RAIL": AssetType.CONVEYOR,
     "FLOOR": AssetType.ZONE,
     "STRUCTURAL": AssetType.COLUMN,
+    # ── S1-T1: jijia gold 高频图层 ──
+    "STEP_1": AssetType.CONVEYOR,    # 261 个 Conveyor_2m 主线层
+    "AM_0": AssetType.OTHER,         # AutoCAD Mechanical 默认层,熵高,保守归 OTHER
+    "_0": AssetType.EQUIPMENT,       # 4 个 CNC/op170e/op180/op20c
 }
 
 # Phase 4.2: 系统图层黑名单 — 前缀匹配,强制归为 OTHER 并降低置信度。
@@ -155,6 +172,15 @@ _SYSTEM_LAYER_PREFIXES: tuple[str, ...] = (
     "DEFPOINTS",      # 定义点(不打印的辅助点)
     "СИСТЕМНЫЙ",      # 俄语 "Системный слой" (LLM 明确指出 cold_rolled 中 95807/95856 实体)
 )
+
+# S2-T3: 注释类 DXF 实体 — 一旦命中即强制 ANNOTATION (覆盖所有上游分类)。
+# 这些实体类型语义明确, 不应再走块名/几何/图层启发式。
+_ANNOTATION_ENTITY_TYPES: frozenset[str] = frozenset({
+    "TEXT", "MTEXT", "DIMENSION",
+    "LEADER", "MULTILEADER", "MLEADER",
+    "ATTDEF", "ATTRIB",
+    "TOLERANCE",
+})
 
 # 实体类型 → 语义关系启发式
 _SPATIAL_LINK_TYPES = {
@@ -536,6 +562,13 @@ class ParseService:
             if any(layer.startswith(prefix) for prefix in _SYSTEM_LAYER_PREFIXES):
                 asset_type = AssetType.OTHER
                 confidence = min(confidence, 0.15)
+
+            # ── S2-T3: ANNOTATION 实体最终覆盖 (位置最末,胜过所有规则) ──
+            # TEXT/MTEXT/DIMENSION 等实体类型语义明确, 即使在系统图层上也应被识别为注释,
+            # 给下游 (text_extraction, label-asset 关联) 提供准确信号。
+            if etype in _ANNOTATION_ENTITY_TYPES:
+                asset_type = AssetType.ANNOTATION
+                confidence = max(confidence, 0.85)
 
             asset = Asset(
                 type=asset_type,

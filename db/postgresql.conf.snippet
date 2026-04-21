@@ -1,0 +1,19 @@
+# ════════════ PostgreSQL settings required for ProLine CAD CDC ════════════
+# Append to your postgresql.conf when running PG natively (not via the
+# db/docker-compose.db.yml container, which sets these via -c flags).
+#
+# Restart required after editing.
+
+# Enable logical replication so debezium / pgoutput-based consumers can
+# subscribe to a slot. Default `replica` is insufficient.
+wal_level = logical
+
+# Each CDC consumer holds one slot; budget for parse/audit/dashboard.
+max_replication_slots = 4
+max_wal_senders = 4
+
+# TimescaleDB shared library (required if you use the timescaledb extension).
+shared_preload_libraries = 'timescaledb'
+
+# Recommended: tune `wal_keep_size` upward if consumers can fall hours behind.
+# wal_keep_size = '2GB'

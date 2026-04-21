@@ -13,17 +13,47 @@ from fastapi.responses import JSONResponse
 
 from shared.config import settings
 
+from agents.parse_agent.agent_loader import load_agent_definition
+
+# 启动期硬校验 agent.json — 失败立即抛错，不允许残缺契约启动
+_AGENT_DEF = load_agent_definition()
+
 app = FastAPI(
     title="ParseAgent — 语义识别 Agent",
-    description="CAD 解析 + 几何修补 + 本体映射",
-    version="1.0.0",
+    description=_AGENT_DEF.raw["description"],
+    version=_AGENT_DEF.version,
 )
+app.state.agent_def = _AGENT_DEF
+
+
+@app.get("/version")
+async def version():
+    """返回 agent.json 元数据 + 当前质量基线 (供 CI/调用方核对)。"""
+    eval_meta = _AGENT_DEF.evaluation
+    tiers = eval_meta.get("tiers", {})
+    return {
+        "name": _AGENT_DEF.name,
+        "version": _AGENT_DEF.version,
+        "model": _AGENT_DEF.model,
+        "tools": [t["name"] for t in _AGENT_DEF.tools],
+        "hooks": list(_AGENT_DEF.hooks.keys()),
+        "scores": {
+            "gold_current": tiers.get("gold", {}).get("current_score"),
+            "gold_target": tiers.get("gold", {}).get("ga_target"),
+            "llm_judge_current": tiers.get("bronze", {}).get("current_score"),
+            "llm_judge_target": tiers.get("bronze", {}).get("ga_target"),
+        },
+    }
 
 
 @app.get("/health")
 async def health():
     """健康检查端点。"""
-    return {"status": "ok", "agent": "ParseAgent", "version": "v1.0"}
+    return {
+        "status": "ok",
+        "agent": _AGENT_DEF.name,
+        "version": _AGENT_DEF.version,
+    }
 
 
 @app.post("/mcp/agent/parse")

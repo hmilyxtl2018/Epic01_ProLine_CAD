@@ -1,0 +1,42 @@
+# ════════════════ ProLine CAD — Schema 验证用 PG+PostGIS+Timescale ════════════════
+# 用途: 独立运行 alembic 三步循环 (upgrade head / downgrade -1 / upgrade head)
+#       与根目录 docker-compose.yml 的 postgres:15-alpine 并存 (端口 5433 避免冲突)
+#
+# 用法:
+#   docker compose -f db/docker-compose.db.yml up -d
+#   $env:POSTGRES_DSN = "postgresql+psycopg2://proline:proline_dev@localhost:5433/proline_cad"
+#   python -m alembic -c db/alembic.ini upgrade head
+#   docker compose -f db/docker-compose.db.yml down -v   # 销毁
+
+services:
+  postgres-spatial:
+    image: timescale/timescaledb-ha:pg16-all
+    container_name: proline-postgres-spatial
+    environment:
+      POSTGRES_DB: proline_cad
+      POSTGRES_USER: proline
+      POSTGRES_PASSWORD: proline_dev
+      # wal_level=logical 为 B5 CDC slot 预留
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+      - "-c"
+      - "max_replication_slots=4"
+      - "-c"
+      - "max_wal_senders=4"
+      - "-c"
+      - "shared_preload_libraries=timescaledb"
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_spatial_data:/home/postgres/pgdata/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U proline -d proline_cad"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_spatial_data:

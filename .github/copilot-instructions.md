@@ -1,104 +1,94 @@
-# ProLine CAD — Workspace Instructions
+# GitHub Copilot Instructions — ProLine CAD
 
-> AI-driven aerospace production line planning platform. PoC/Spike phase with 10 independent experiments.
-> For full project overview, architecture, and domain concepts see [CLAUDE.md](../CLAUDE.md).
+> Slim mirror of [CLAUDE.md](../CLAUDE.md). For domain depth, conventions, and
+> rationale, read CLAUDE.md. This file is the fast lane for Copilot suggestions.
 
-## Build & Test
+## Project at a glance
 
-```bash
-# All tests (from repo root)
-cd spikes && python -m pytest
+AI-driven aerospace production line planning. Five MCP-based agents: Parse →
+Constraint → Layout → Simulation → Report, driven by an Orchestrator. Python 3.11+
+backend (FastAPI, Pydantic v2, SQLAlchemy 2.0, Alembic), Next.js 14 frontend,
+PostgreSQL 16 + PostGIS + TimescaleDB + Redis + MinIO + NATS for data.
 
-# Single spike
-cd spikes && python -m pytest spike_03_collision/tests/
+## Hard rules (do not deviate)
 
-# By priority or spike marker
-cd spikes && python -m pytest -m p0
-cd spikes && python -m pytest -m spike3
-cd spikes && python -m pytest -m "not slow"
+1. **MCP-only between agents**. Never `from agents.<other> import ...`. Use the
+   Orchestrator and pass `mcp_context_id` on every call.
+2. **No emoji** anywhere — UI, logs, commits, comments, code.
+3. **Pydantic v2 only** (`model_config = ConfigDict(...)`); no `class Config:`.
+4. **Named exports only** in TS; no `from x import *` in Python.
+5. **No `Any`, no bare `except:`, no `print()`** in services. Use specific types,
+   typed exceptions, `log = logging.getLogger(__name__)`.
+6. **Secrets via env** (`OPENAI_API_KEY`, `POSTGRES_DSN`, `JWT_SIGNING_KEY`,
+   `MCP_BEARER_TOKEN`, `MINIO_*`). Never literals; never in commits or logs.
+7. **Alembic-managed migrations**. Never edit a committed revision; always
+   `alembic revision -m "..."`.
+8. **Pyproject managed deps**. Never append to `requirements.txt` by hand.
+
+## Code shape
+
+- Imports in three blocks (stdlib → third-party → local), with
+  `from __future__ import annotations` first.
+- Public API: docstring + full type hints. Domain errors inherit from a base
+  exception (`ParseError`, `H4BudgetExceeded`).
+- TS interfaces use `IXxx` prefix. Python interfaces use `typing.Protocol`.
+- Files: `snake_case.py`, `kebab-case.tsx`. Identifiers: English. Comments,
+  docstrings, PRD, UI copy: Chinese (zh-CN).
+- Tests in `<module>/tests/test_<topic>.py`; one assert family per test;
+  table-driven with `pytest.mark.parametrize`.
+
+## Test pyramid (per agent minimums)
+
+- **L0 schema/contract** ≥ 30 — agent.json, Pydantic round-trip, API envelope.
+- **L1 gold regression** ≥ 10 — frozen input → expected output (`scripts/gold_eval.py`).
+- **L2 silver** — synthetic edge cases, marked `slow`.
+- **L3 LLM-judge** — nightly only.
+
+CI gates run in order: `schema-check → unit → integration → gold-regression`.
+A failed stage blocks the PR.
+
+## Common commands (PowerShell)
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[parse,constraint,layout,dev]"
+
+pytest agents/parse_agent/tests/ -q
+ruff check . ; ruff format . ; mypy agents/ shared/
+python scripts/gold_eval.py
+python scripts/check_schema_drift.py
+python scripts/check_agent_isolation.py
+alembic upgrade head
+.\scripts\dev_up.ps1
 ```
 
-- Python 3.11, venv at `.venv/` — activate with `.venv\Scripts\activate` (Windows CMD)
-- Pytest config: `spikes/pytest.ini` — addopts: `-v --tb=short --strict-markers`
-- Markers: `p0`/`p1`/`p2` (priority), `spike1`–`spike10`, `slow`, `integration`, `gpu`
+## When generating code
 
-## Code Conventions
+- **Suggest typed signatures** even for short helpers; never `def f(x):`.
+- **Reach for the existing model**: `shared/models.py` is the source of truth.
+  Extend enums there before introducing parallel types in an agent.
+- **Pass `mcp_context_id` through**. Any new function that produces a domain
+  object must accept and propagate it.
+- **Reuse `tools/registry.py` patterns** (ParseAgent) when adding agent-local
+  callable tools — register in `agent.json`, do not introduce a new framework.
+- **Migrations**: when changing a Pydantic model that maps to DDL, also draft an
+  Alembic revision in the same PR; CI runs `check_schema_drift.py`.
 
-### Language
-- **Identifiers & API names**: English
-- **Docstrings, comments, PRD docs, test descriptions**: Chinese
-- Section separators in source: `# ════════════════ 标题 ════════════════`
+## What not to suggest
 
-### Spike Module Pattern
-Each spike lives in `spikes/spike_NN_<name>/` with `src/`, `tests/`, `test_data/`.
+- `from agents.X import ...` from another agent's namespace.
+- Direct DB access into a different agent's tables.
+- `requests` in async paths — use `httpx.AsyncClient`.
+- `pkg_resources`, `imp`, `distutils` — use `importlib.*`.
+- Storing or printing API keys, JWTs, DSNs.
+- Emoji in any output, including completion comments and log strings.
+- New top-level directories without an ADR (`docs/adr/`).
 
-Source modules follow this pattern:
-```python
-from dataclasses import dataclass, field
-from pathlib import Path
+## UI/UX guidance
 
-@dataclass
-class ResultType:
-    """Chinese docstring describing the return type."""
-    field_name: type = default
-
-class ServiceClass:
-    """Chinese docstring with spec reference (e.g. §2.4)."""
-    def method(self, ...) -> ResultType:
-        raise NotImplementedError   # TDD RED phase — stub only
-```
-
-### Test Pattern
-```python
-import pytest
-from conftest import Thresholds
-
-@pytest.mark.p0
-@pytest.mark.spike1
-class TestFeatureName:
-    """S1-TC01: Chinese description of test scenario — Go/No-Go criteria."""
-    def test_specific_case(self, fixture_arg):
-        result = service.method(...)
-        assert result.metric <= Thresholds.S1_THRESHOLD_NAME
-```
-
-- All Go/No-Go thresholds live in `spikes/conftest.py::Thresholds` — always assert against these, never hardcode values
-- Test case IDs (e.g. `S1-TC01`) map to the verification plan in `PRD/关键技术验证计划.md`
-- Use `@pytest.mark.parametrize` for matrix testing across tiers/sizes
-
-## Architecture Decisions
-
-- **MCP-First**: All inter-module communication uses Model Context Protocol. No direct DB coupling between agents.
-- **Context traceability**: Every operation carries `mcp_context_id`
-- **5 Agent Services**: Parse → Constraint → Layout → Simulation → Report (each is an MCP Server)
-- **Ontology model**: `AeroOntology-v1.0` with Objects, Links, Provenance, Trust, Actions
-- **Trust Gate pattern**: CP-A through CP-E checkpoints gate data flow between stages
-- See `PRD/PRD全局附录_数据模型与接口规范.md` for data model and API specs
-
-## Key Domain Terms
-
-| Term | Meaning |
-|------|---------|
-| SiteModel | Single source of truth for parsed floor plans (site_guid: SM-xxx) |
-| Asset | Equipment with MDI (Master Device ID), Footprint, Ports |
-| CP-A Token | Trust gate token — SiteModel must pass all preconditions before layout stage |
-| TRAVERSE_PROHIBITED | Auto-generated constraint for ground pits — highest priority, non-overridable |
-
-## Pitfalls
-
-- **Working directory**: Always `cd spikes` before running pytest — tests use relative paths from `spikes/`
-- **Stub-only sources**: All `src/` modules raise `NotImplementedError`. Implement the stub body when making a spike pass, don't restructure the class.
-- **Thresholds are law**: Never weaken a threshold to make a test pass. If a spike can't meet a threshold, that's a No-Go finding.
-- **Test data tiers**: Spike-1 has tiered DXF files (tier1/tier2/tier3) with increasing complexity. `real_world/` contains production-scale files — handle memory carefully.
-- **No dependency manifest**: There's no requirements.txt yet. When adding dependencies for a spike, document them in the spike's README or a local requirements file.
-- **HTML prototypes**: Located in `PRD/` as standalone files (Tailwind CDN, no build step). Open directly in browser.
-
-## PRD Documents
-
-All in `PRD/`, all in Chinese:
-- `PRD-1` through `PRD-5` (v3.0) — one per pipeline stage
-- `PRD全局附录_数据模型与接口规范.md` — data model & API reference
-- `关键技术验证计划.md` — spike acceptance criteria (maps to `Thresholds`)
-- `航空制造领域测试数据方案.md` — test data specification
-- `技术方案文档.md` — technical architecture
-- `step4...原型设计执行计划 v3.0.md` — prototype design execution plan
+- Three states for every list/table/chart: empty, loading skeleton, error
+  with retry plus copyable `mcp_context_id`.
+- Light, airy palette; cool whites and soft grays; accents `#2563eb` blue and
+  `#14b8a6` teal. No dark, saturated, or aggressive backgrounds.
+- Keyboard-reachable, ARIA-labeled, color-blind safe. axe-core runs in CI;
+  Lighthouse Accessibility ≥ 95 is the gate.

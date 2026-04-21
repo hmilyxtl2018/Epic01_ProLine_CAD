@@ -1,0 +1,159 @@
+{
+  "name": "parse-agent",
+  "version": "1.0.0-rc4",
+  "description": "Convert raw CAD files (DWG/DXF) into a typed, validated SiteModel with classified assets, ontology links, provenance, and confidence — ready for downstream ConstraintAgent consumption. Handles format detection, ODA fallback, coordinate normalization, rule-based + LLM-fallback classification, and topology link inference.",
+
+  "model": "claude-opus-4-6",
+
+  "prompt": "You are ParseAgent — the first stage in a multi-agent CAD-to-SiteModel pipeline.\n\n# Mission\nGiven a CAD file, produce a SiteModel JSON that downstream agents (ConstraintAgent, LayoutAgent) can consume without ambiguity.\n\n# Hard Rules\n1. NEVER fabricate geometry, coordinates, or links. Only the deterministic pipeline (Hooks H1-H3) can write coordinates and links.\n2. You are ONLY invoked when rule-based classification yields type=Other AND confidence<0.3 (Hook H4 fallback).\n3. You MUST return a JSON object matching the `ClassificationResponse` schema:\n   {\"type\": <one of Equipment|Conveyor|LiftingPoint|Zone|Annotation|Other|Unknown>,\n    \"sub_type\": <string|null>,\n    \"confidence\": <0.0-1.0, will be discounted by 0.8 in calibration>,\n    \"evidence_keywords\": [<string>, ...]  // MUST be substrings of the input}\n4. evidence_keywords MUST be tokens that literally appear in the input (block_name, layer, sample_labels). The validator (Hook H5) will reject your response if any keyword is not found verbatim.\n5. If evidence is insufficient, return {\"type\": \"Unknown\", \"confidence\": 0.0, \"evidence_keywords\": []}. Do NOT guess.\n6. Do NOT call any tool with cost=high without first calling lookup_block_definition.\n7. Per-call budget: max 3 tool calls. Per-file budget: max 50 LLM invocations (enforced externally).\n\n# Few-shot Anchors (auto-injected from agents/parse_agent/gold/jijia_gold.yaml)\nGold examples are loaded at runtime — treat them as ground truth.\n\n# Domain Hints\n- Chinese factory blocks: 清洗机=WashingMachine, 珩磨机=HoningMachine, 缸盖装配=AssemblyStation\n- English machining: HARDING/EXTAR/Landis → Equipment(sub_type=Grinder); op020/op170 → Equipment(sub_type=ProcessMachine)\n- Anonymous A$C... blocks → Unknown (do not classify)\n- Layer 'STEP_1' is conveyor backbone; 'AM_0' is mixed; '0' is over-loaded primary layer\n\n# Output\nReturn ONLY the JSON object. No prose, no markdown fences.",
+
+  "tools": [
+    {
+      "name": "lookup_block_definition",
+      "description": "Read-only. Return the entity composition (LINE×N, INSERT×N, ATTDEF×N) and bbox of a block definition. Use this BEFORE search_similar_blocks to ground your reasoning in the actual geometry.",
+      "cost": "low",
+      "side_effects": false,
+      "status": "implemented",
+      "implementation": "agents.parse_agent.tools.registry:lookup_block_definition",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "block_name": {"type": "string"}
+        },
+        "required": ["block_name"]
+      }
+    },
+    {
+      "name": "list_layer_entities",
+      "description": "Read-only. Sample up to N entities on a given layer (entity_type, label, no coords). Use to disambiguate layer intent.",
+      "cost": "low",
+      "side_effects": false,
+      "status": "implemented",
+      "implementation": "agents.parse_agent.tools.registry:list_layer_entities",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "layer": {"type": "string"},
+          "limit": {"type": "integer", "default": 20, "maximum": 50}
+        },
+        "required": ["layer"]
+      }
+    },
+    {
+      "name": "search_similar_blocks",
+      "description": "Read-only RAG over historical gold annotations. Returns top-k blocks whose name has high semantic similarity to the query, with their gold-labeled types.",
+      "cost": "medium",
+      "side_effects": false,
+      "status": "planned",
+      "planned_phase": "Phase5 — RAG index not in GA scope; runtime returns tool_temporarily_unavailable",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "block_name": {"type": "string"},
+          "top_k": {"type": "integer", "default": 5, "maximum": 10}
+        },
+        "required": ["block_name"]
+      }
+    },
+    {
+      "name": "propose_taxonomy_term",
+      "description": "Write-deferred. Submits a candidate term to the quarantine queue (exp/llm_classifications/<run_id>.jsonl). Does NOT modify _BLOCK_ASSET_PATTERNS at runtime — only the weekly aggregation script promotes terms after human review.",
+      "cost": "high",
+      "side_effects": true,
+      "requires_approval": true,
+      "status": "implemented",
+      "implementation": "agents.parse_agent.tools.registry:propose_taxonomy_term",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "term": {"type": "string"},
+          "asset_type": {"type": "string", "enum": ["Equipment", "Conveyor", "LiftingPoint", "Zone", "Annotation", "Other"]},
+          "evidence": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+        },
+        "required": ["term", "asset_type", "evidence"]
+      }
+    }
+  ],
+
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "cad_file_path": {"type": "string", "description": "Absolute path to .dwg or .dxf"},
+      "options": {
+        "type": "object",
+        "properties": {
+          "enable_llm_fallback": {"type": "boolean", "default": true},
+          "llm_call_budget": {"type": "integer", "default": 50},
+          "token_budget": {"type": "integer", "default": 20000},
+          "regression_baseline": {"type": "string", "description": "Optional path to baseline gold_eval.json"}
+        }
+      }
+    },
+    "required": ["cad_file_path"]
+  },
+
+  "output_schema": {
+    "$ref": "shared/schemas/site_model.json",
+    "description": "SiteModel with assets[], links[], geometry_integrity_score, statistics, plus mcp_context envelope"
+  },
+
+  "hooks": {
+    "H1_format_validate":        {"kind": "deterministic", "blocking": true,  "on_fail": "abort:INVALID_FORMAT"},
+    "H2_coord_sanity":           {"kind": "deterministic", "blocking": false, "on_fail": "flag:coord_origin_dump"},
+    "H3_rule_classify":          {"kind": "deterministic", "blocking": false, "writes": ["asset.type", "asset.confidence"]},
+    "H4_llm_classify_unknowns":  {"kind": "llm",           "blocking": false, "trigger": "asset.type==Other AND asset.confidence<0.3"},
+    "H5_response_validator":     {"kind": "deterministic", "blocking": true,  "rule": "evidence_keywords ⊆ input_tokens AND type ∈ enum AND confidence ∈ [0,1]", "on_fail": "discard_response;keep_H3"},
+    "H6_confidence_calibration": {"kind": "deterministic", "rule": "if classifier_kind=='llm_fallback': confidence *= 0.8"},
+    "H7_gold_regression_check":  {"kind": "deterministic", "blocking": true,  "ci_only": true, "rule": "gold_score - baseline > -0.02"}
+  },
+
+  "guardrails": {
+    "cost": {
+      "per_file": {"max_llm_calls": 50, "max_tokens": 20000},
+      "per_run":  {"max_total_cost_usd": 5.0},
+      "on_exceed": "downgrade_to_rule_only;mark_site_model.mode='fallback'"
+    },
+    "quality": {
+      "gold_regression_threshold": 0.02,
+      "drift_window_days": 7,
+      "drift_alert_threshold": 0.05
+    },
+    "observability": {
+      "telemetry": [
+        "parse_agent.parse_time_ms",
+        "parse_agent.llm.calls",
+        "parse_agent.llm.tokens",
+        "parse_agent.llm.quarantined",
+        "parse_agent.gold_score"
+      ],
+      "trace_provider": "opentelemetry"
+    },
+    "safety": {
+      "input_max_size_mb": 200,
+      "allowed_extensions": [".dwg", ".dxf"],
+      "redact_pii": false,
+      "block_writes_outside": ["exp/", "agents/parse_agent/gold/quarantine/"]
+    }
+  },
+
+  "stage_gates": {
+    "L1_input":    {"name": "Input & Format",    "exit_criteria": "ezdxf.Doc opened OR INVALID_FORMAT raised"},
+    "L2_geometry": {"name": "Geometry & Coords", "exit_criteria": "max_abs_coord<1e7 AND INSERT-expanded-to-world"},
+    "L3_semantic": {"name": "Semantic Classify", "exit_criteria": "gold strict_acc ≥ 0.92 AND Equipment recall ≥ 0.85"},
+    "L4_topology": {"name": "Links & Topology",  "exit_criteria": "link_symmetry ≥ 0.9 AND FEEDS/LOCATED_IN/LABELED_BY in gold range"},
+    "L5_contract": {"name": "Output Contract",   "exit_criteria": "pydantic strict pass AND every asset has provenance"}
+  },
+
+  "evaluation": {
+    "tiers": {
+      "gold":   {"tool": "scripts/gold_eval.py",          "baseline": "exp/parse_results/run_p0_all/gold_eval_phase4.json", "current_score": 0.8267, "ga_target": 0.92},
+      "silver": {"tool": "scripts/quality_matrix.py",     "current_score": 0.70},
+      "bronze": {"tool": "scripts/quality_matrix_llm.py", "current_score": 0.301, "ga_target": 0.45}
+    },
+    "ci_gate": "scripts/gold_eval.py --baseline {gold.baseline} --regression-threshold 0.02"
+  },
+
+  "permission_mode": "default",
+  "max_turns": 5,
+  "auto_compact": true
+}

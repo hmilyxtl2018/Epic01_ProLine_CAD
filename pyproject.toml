@@ -19,6 +19,9 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",
     "pydantic>=2.7.0",
     "psycopg2-binary>=2.9.9",
+    "sqlalchemy>=2.0.30",
+    "alembic>=1.13.0",
+    "geoalchemy2>=0.14.0",
     "kafka-python>=2.0.2",
     "minio>=7.2.0",
     "httpx>=0.27.0",
@@ -69,6 +72,25 @@ report = [
     "Jinja2>=3.1.0",
 ]
 
+# Dashboard backend (T2 W2 / M1+M2) — observability + queue + auth + uploads
+dashboard = [
+    "structlog>=24.1.0",
+    "opentelemetry-sdk>=1.25.0",
+    "opentelemetry-api>=1.25.0",
+    "opentelemetry-instrumentation-fastapi>=0.46b0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.46b0",
+    "prometheus-client>=0.20.0",
+    "pytest-timeout>=2.3.0",
+    # M2 queue + pub/sub
+    "arq>=0.26.0",
+    "redis>=5.0.0",
+    # M2 upload validation
+    "python-magic-bin>=0.4.14; platform_system == 'Windows'",
+    "python-magic>=0.4.27; platform_system != 'Windows'",
+    # M2 JWT auth
+    "python-jose[cryptography]>=3.3.0",
+]
+
 # 开发工具
 dev = [
     "pytest>=8.2.0",
@@ -80,9 +102,9 @@ dev = [
     "httpx>=0.27.0",
 ]
 
-# 完整安装（所有 Agent + 开发工具）
+# 完整安装（所有 Agent + 开发工具 + Dashboard 后端）
 all = [
-    "proline-cad[parse,constraint,layout,llm,sim,report,dev]",
+    "proline-cad[parse,constraint,layout,llm,sim,report,dev,dashboard]",
 ]
 
 [project.urls]
@@ -92,7 +114,7 @@ Documentation = "https://github.com/hmilyxtl2018/Epic01_ProLine_CAD/tree/main/PR
 # ════════════════ Tool 配置 ════════════════
 
 [tool.setuptools.packages.find]
-include = ["agents*", "shared*"]
+include = ["agents*", "shared*", "app*"]
 
 [tool.ruff]
 target-version = "py311"

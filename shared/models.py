@@ -35,6 +35,7 @@ class AssetType(str, Enum):
     CNC_MACHINE = "CncMachine"
     ELECTRICAL_PANEL = "ElectricalPanel"
     STORAGE_RACK = "StorageRack"
+    ANNOTATION = "Annotation"
     OTHER = "Other"
 
 

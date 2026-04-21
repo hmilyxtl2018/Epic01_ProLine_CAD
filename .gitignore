@@ -38,11 +38,17 @@ coverage.xml
 .mypy_cache/
 .pytype/
 
-# ════════════════ Environment ════════════════
+# ════════════════ Environment / Secrets ════════════════
+# Per CLAUDE.md §8: secrets only via env vars; never commit any .env* file.
 .env
+.env.*
 .env.local
 .env.*.local
 *.env
+*.local
+*.local.*
+*.secret
+*.secret.*
 
 # ════════════════ OS ════════════════
 .DS_Store
@@ -76,4 +82,9 @@ tools/
 dump_*.txt
 *.log
 offload_temp/
+
+
+# ════════════════ Local scratch ════════════════
+tmp_quarantine/
+tmp_review.csv
 

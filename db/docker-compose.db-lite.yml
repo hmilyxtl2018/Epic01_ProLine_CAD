@@ -1,0 +1,73 @@
+# ═══════════════ Lite verification (PostGIS only, no TimescaleDB / pgvector) ═══════════════
+# Use this when network can't reach the 2.1 GB timescale/timescaledb-ha image.
+# Migrations 0001b + 0002 + 0004 + 0005 are verified locally; revisions 0003
+# (TimescaleDB hypertable) and 0006 (pgvector) are intentionally skipped via
+# `alembic stamp` and are verified on CI where the full ha image is reachable.
+#
+# Three-step verification loop:
+#   docker compose -f db/docker-compose.db-lite.yml up -d
+#   $env:POSTGRES_DSN = "postgresql+psycopg2://proline:proline_dev@localhost:5434/proline_cad"
+#   python -m alembic -c db/alembic.ini stamp 0001_baseline
+#   python -m alembic -c db/alembic.ini upgrade 0002_postgis_spatial   # runs 0001b + 0002
+#   python -m alembic -c db/alembic.ini downgrade -1                    # back to 0001b
+#   python -m alembic -c db/alembic.ini upgrade 0002_postgis_spatial    # back to 0002
+#   python -m alembic -c db/alembic.ini stamp 0003_timescale_mcp        # skip Timescale
+#   python -m alembic -c db/alembic.ini upgrade 0005_audit_log_actions  # runs 0004 + 0005
+#   python -m alembic -c db/alembic.ini downgrade -1                    # back to 0004
+#   python -m alembic -c db/alembic.ini upgrade 0005_audit_log_actions  # back to 0005
+#   python -m alembic -c db/alembic.ini stamp 0006_pgvector_reserve     # skip pgvector
+#   docker compose -f db/docker-compose.db-lite.yml down -v
+
+services:
+  postgres-postgis:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: proline-postgres-postgis
+    environment:
+      POSTGRES_DB: proline_cad
+      POSTGRES_USER: proline
+      POSTGRES_PASSWORD: proline_dev
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+      - "-c"
+      - "max_replication_slots=4"
+      - "-c"
+      - "max_wal_senders=4"
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_postgis_data:/var/lib/postgresql/data
+      # 0001_baseline is a stamp-only no-op; the legacy DDL ships via entrypoint.
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U proline -d proline_cad"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # M2: arq queue + WS pub/sub backend.
+  # Connect from the host with REDIS_URL=redis://localhost:6380
+  redis:
+    image: redis:7.2-alpine
+    container_name: proline-redis
+    command:
+      - "redis-server"
+      - "--appendonly"
+      - "yes"
+      - "--save"
+      - "60"
+      - "1"
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_postgis_data:
+  redis_data:

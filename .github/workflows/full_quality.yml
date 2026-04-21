@@ -1,0 +1,131 @@
+name: Full Quality Gate
+
+# B4 -- end-to-end quality gate orchestrating schema drift, unit tests,
+# integration tests, and the gold regression. Each job fails the PR.
+#
+# Stage order is intentional:
+#   schema-check  (cheapest, < 5 s)
+#       |
+#   unit          (no DB, ~1 min)
+#       |
+#   integration   (PG container, ~3 min)
+#       |
+#   gold-regression  (only if baseline fixture present)
+#
+# The integration stage uses the same image as db/docker-compose.db.yml so
+# CI and local dev share one PostGIS+Timescale topology.
+
+on:
+  pull_request:
+    paths:
+      - "agents/**"
+      - "shared/**"
+      - "app/**"
+      - "db/**"
+      - "tests/**"
+      - "scripts/check_schema_drift.py"
+      - "scripts/check_agent_isolation.py"
+      - "pyproject.toml"
+      - "requirements.txt"
+      - ".github/workflows/full_quality.yml"
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: full-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  schema-check:
+    name: Schema drift + agent isolation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install minimal deps
+        run: pip install pydantic sqlalchemy geoalchemy2
+      - name: Run drift check (Pydantic <-> ORM)
+        run: python scripts/check_schema_drift.py
+      - name: Run agent isolation check (no cross-agent imports)
+        run: python scripts/check_agent_isolation.py
+
+  unit:
+    name: Unit tests (no DB)
+    runs-on: ubuntu-latest
+    needs: schema-check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: pip install -e ".[all]"
+      - name: Run unit tests
+        run: python -m pytest agents/ shared/ tests/app -m "not db_fixture and not slow" --tb=short
+
+  integration:
+    name: Integration tests (PG + PostGIS + Timescale)
+    runs-on: ubuntu-latest
+    needs: unit
+    services:
+      postgres:
+        image: timescale/timescaledb-ha:pg16-all
+        env:
+          POSTGRES_DB: proline_cad
+          POSTGRES_USER: proline
+          POSTGRES_PASSWORD: proline_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U proline -d proline_cad"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_DSN: postgresql+psycopg2://proline:proline_dev@localhost:5432/proline_cad
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: pip install -e ".[all]"
+      - name: Apply migrations (upgrade head)
+        run: python -m alembic -c db/alembic.ini upgrade head
+      - name: Reversibility check (downgrade -1 then upgrade head)
+        run: |
+          python -m alembic -c db/alembic.ini downgrade -1
+          python -m alembic -c db/alembic.ini upgrade head
+      - name: Run integration tests
+        run: python -m pytest tests/ agents/ shared/ -m "db_fixture" --tb=short
+
+  gold-regression:
+    name: Gold regression (H7)
+    runs-on: ubuntu-latest
+    needs: integration
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: pip install -e ".[all]"
+      - name: Check baseline fixture exists
+        id: check
+        run: |
+          if [ -f "exp/parse_results/run_p0_all/gold_eval_phase4.json" ] && \
+             [ -d "agents/parse_agent/tests/fixtures/run_ci" ]; then
+            echo "has_fixture=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_fixture=false" >> $GITHUB_OUTPUT
+            echo "::notice::Gold regression skipped -- baseline fixture absent."
+          fi
+      - name: Run gold_eval regression
+        if: steps.check.outputs.has_fixture == 'true'
+        run: python scripts/gold_eval.py --regression --baseline exp/parse_results/run_p0_all/gold_eval_phase4.json

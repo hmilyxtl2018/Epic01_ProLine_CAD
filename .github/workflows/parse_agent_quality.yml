@@ -1,0 +1,93 @@
+name: ParseAgent Quality Gate
+
+# H7 — Gold 回归门禁。
+# 触发: 修改 ParseAgent 代码 / 契约 / gold 集 / 评估脚本 时，自动跑契约校验 + 单测。
+# Gold/llm-judge 评估如果产物已就绪则跑回归比对，否则跳过 (CI 不等长跑解析)。
+
+on:
+  pull_request:
+    paths:
+      - "agents/parse_agent/**"
+      - "shared/models.py"
+      - "shared/config.py"
+      - "scripts/gold_eval.py"
+      - "scripts/quality_diagnose.py"
+      - ".github/workflows/parse_agent_quality.yml"
+  push:
+    branches: [main, develop]
+    paths:
+      - "agents/parse_agent/**"
+
+concurrency:
+  group: parse-agent-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: agent.json 契约校验
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: pip install -e ".[all]"
+      - name: Run agent definition tests
+        run: python -m pytest agents/parse_agent/tests/test_agent_definition.py --tb=short -v
+
+  unit:
+    name: ParseAgent 单元测试
+    runs-on: ubuntu-latest
+    needs: contract
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: pip install -e ".[all]"
+      - name: Run ParseAgent tests
+        run: python -m pytest agents/parse_agent/tests/ --tb=short -v
+
+  gold-regression:
+    name: Gold 回归 (H7)
+    runs-on: ubuntu-latest
+    needs: unit
+    # 仅当存在已计算好的 run 目录 (基线 fixture) 时才执行，
+    # 避免 CI 触发实际 LLM 解析 (长耗时 + token 成本)。
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: pip install -e ".[all]"
+      - name: Check baseline fixture exists
+        id: check
+        run: |
+          if [ -f "exp/parse_results/run_p0_all/gold_eval_phase4.json" ] && \
+             [ -d "agents/parse_agent/tests/fixtures/run_ci" ]; then
+            echo "has_fixture=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_fixture=false" >> $GITHUB_OUTPUT
+            echo "::notice::Gold regression skipped — fixture not committed yet (S1-T2 will add)"
+          fi
+      - name: Run gold_eval regression check
+        if: steps.check.outputs.has_fixture == 'true'
+        run: |
+          python scripts/gold_eval.py \
+            --run-dir agents/parse_agent/tests/fixtures/run_ci \
+            --baseline exp/parse_results/run_p0_all/gold_eval_phase4.json \
+            --regression-threshold 0.02 \
+            --output exp/parse_results/ci_gold_eval.json
+      - name: Upload gold_eval artifact
+        if: steps.check.outputs.has_fixture == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-gold-eval-${{ github.sha }}
+          path: exp/parse_results/ci_gold_eval.json
+          retention-days: 30
