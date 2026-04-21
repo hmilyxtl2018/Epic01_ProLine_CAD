@@ -47,3 +47,35 @@ export interface ErrorEnvelope {
 }
 
 export type Role = "viewer" | "operator" | "reviewer" | "admin";
+
+// ── Auth ──────────────────────────────────────────────────────────────
+
+export interface AuthIdentity {
+  actor: string;
+  role: Role | string;
+}
+
+export interface LoginCookieRequest {
+  email: string;
+  password: string;
+  role: Role | string;
+}
+
+// /auth/login-cookie returns MeResponse on the wire: { actor, role }.
+export type LoginCookieResponse = AuthIdentity;
+
+// ── WebSocket frames ──────────────────────────────────────────────────
+
+export interface WsStatusFrame {
+  event: "status";
+  mcp_context_id: string;
+  status: RunStatus | string;
+  ts: string;
+}
+
+export interface WsNotFoundFrame {
+  event: "not_found";
+  mcp_context_id: string;
+}
+
+export type WsRunFrame = WsStatusFrame | WsNotFoundFrame;

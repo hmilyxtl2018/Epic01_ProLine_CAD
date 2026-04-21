@@ -1,48 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getActor, getRole, setActor, setRole } from "@/lib/api";
-import type { Role } from "@/lib/types";
+// Identity badge — shows the cookie-session actor + role with a logout
+// button. Replaces the legacy "edit my role from a dropdown" UX now that
+// /auth/login-cookie owns identity.
 
-const ROLES: Role[] = ["viewer", "operator", "reviewer", "admin"];
+import { useAuth } from "@/components/AuthProvider";
 
 export function RoleSwitcher() {
-  const [role, setRoleState] = useState<Role>("viewer");
-  const [actor, setActorState] = useState<string>("anonymous@dev");
+  const { identity, isLoading, logout } = useAuth();
 
-  useEffect(() => {
-    setRoleState(getRole());
-    setActorState(getActor());
-  }, []);
+  if (isLoading) {
+    return <span className="text-xs text-zinc-400">…</span>;
+  }
+  if (!identity) {
+    return <span className="text-xs text-zinc-400">not signed in</span>;
+  }
 
   return (
-    <div className="flex items-center gap-2 text-xs text-zinc-600">
-      <input
-        value={actor}
-        onChange={(e) => {
-          setActorState(e.target.value);
-          setActor(e.target.value);
-        }}
-        className="w-44 rounded border px-2 py-1"
-        placeholder="actor@example.com"
-      />
-      <select
-        value={role}
-        onChange={(e) => {
-          const r = e.target.value as Role;
-          setRoleState(r);
-          setRole(r);
-          // Force any open queries to refetch with the new role.
-          if (typeof window !== "undefined") window.location.reload();
-        }}
-        className="rounded border bg-white px-2 py-1"
+    <div className="flex items-center gap-3 text-xs text-zinc-600">
+      <span className="font-mono">{identity.actor}</span>
+      <span className="rounded bg-zinc-100 px-2 py-0.5 font-medium uppercase tracking-wide">
+        {identity.role}
+      </span>
+      <button
+        type="button"
+        onClick={() => void logout()}
+        className="rounded border px-2 py-0.5 hover:bg-zinc-50"
       >
-        {ROLES.map((r) => (
-          <option key={r} value={r}>
-            {r}
-          </option>
-        ))}
-      </select>
+        Sign out
+      </button>
     </div>
   );
 }

@@ -1,12 +1,20 @@
-// Tiny fetch wrapper -- adds X-Role / X-Actor headers, parses ErrorEnvelope.
+// Tiny fetch wrapper -- cookie session + double-submit CSRF.
 //
-// Headers come from localStorage so the user can switch roles via the
-// RoleSwitcher component without re-login (M1 trust model; M3 will JWT).
+// Auth model (M3, Phase E2 cookie path):
+//   - POST /auth/login-cookie sets `proline_session` (httpOnly) + `proline_csrf`
+//     (JS-readable). Browser then sends both on every same-origin request via
+//     `credentials: "include"`.
+//   - For state-changing methods we ALSO send the CSRF token in the
+//     `X-CSRF-Token` header. Backend constant-time compares cookie vs header
+//     and HMAC-verifies the token against the actor.
+//   - Legacy `X-Role` / `X-Actor` headers are still sent so internal tooling
+//     and tests that rely on them keep working until M4 fully retires them.
 
 import type { ErrorEnvelope, Role } from "./types";
 
 const ROLE_KEY = "proline.role";
 const ACTOR_KEY = "proline.actor";
+const CSRF_COOKIE = "proline_csrf";
 
 export function getRole(): Role {
   if (typeof window === "undefined") return "viewer";
@@ -30,6 +38,14 @@ export function setActor(actor: string): void {
   window.localStorage.setItem(ACTOR_KEY, actor);
 }
 
+export function readCsrfCookie(): string {
+  if (typeof document === "undefined") return "";
+  const m = document.cookie.match(new RegExp(`(?:^|; )${CSRF_COOKIE}=([^;]+)`));
+  return m ? decodeURIComponent(m[1]) : "";
+}
+
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
 export class ApiError extends Error {
   envelope: ErrorEnvelope | null;
   status: number;
@@ -49,18 +65,23 @@ interface RequestOpts {
 }
 
 async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
+  const method = (opts.method || "GET").toUpperCase();
   const headers: Record<string, string> = {
+    // Legacy headers -- kept for backwards-compat during M3 rollout.
     "X-Role": getRole(),
     "X-Actor": getActor(),
     ...(opts.headers || {}),
   };
-  // /api/* is rewritten to the backend by next.config.js (dev) and by your
-  // ingress in prod. No CORS needed.
+  if (!SAFE_METHODS.has(method)) {
+    const csrf = readCsrfCookie();
+    if (csrf) headers["X-CSRF-Token"] = csrf;
+  }
   const r = await fetch(`/api${path}`, {
-    method: opts.method || "GET",
+    method,
     body: opts.body ?? null,
     headers,
     signal: opts.signal,
+    credentials: "include",
   });
   const text = await r.text();
   let parsed: unknown = null;
@@ -72,15 +93,19 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
     }
   }
   if (!r.ok) {
-    const env = (parsed && typeof parsed === "object" && "error_code" in parsed
-      ? (parsed as ErrorEnvelope)
-      : null);
+    const env =
+      parsed && typeof parsed === "object" && "error_code" in parsed
+        ? (parsed as ErrorEnvelope)
+        : null;
     throw new ApiError(env?.message || r.statusText, r.status, env);
   }
   return parsed as T;
 }
 
 import type {
+  AuthIdentity,
+  LoginCookieRequest,
+  LoginCookieResponse,
   RunCreatedResponse,
   RunDetail,
   RunListResponse,
@@ -98,4 +123,15 @@ export const api = {
       body: fd,
     });
   },
+};
+
+export const auth = {
+  login: (body: LoginCookieRequest) =>
+    request<LoginCookieResponse>("/auth/login-cookie", {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "Content-Type": "application/json" },
+    }),
+  logout: () => request<{ ok: boolean }>("/auth/logout", { method: "POST" }),
+  me: () => request<AuthIdentity>("/auth/me"),
 };

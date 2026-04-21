@@ -3,14 +3,21 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useEffect } from "react";
 import { ApiError, api } from "@/lib/api";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useRunStream } from "@/lib/useRunStream";
+import { useQueryClient } from "@tanstack/react-query";
 
 const TERMINAL = new Set(["SUCCESS", "SUCCESS_WITH_WARNINGS", "ERROR"]);
 
 export default function RunDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
+  const qc = useQueryClient();
+
+  // Open WS stream — when connected, polling backs off to a long interval.
+  const stream = useRunStream(id || null);
 
   const q = useQuery({
     queryKey: ["run", id],
@@ -18,9 +25,18 @@ export default function RunDetailPage() {
     enabled: !!id,
     refetchInterval: (query) => {
       const s = query.state.data?.status;
-      return s && TERMINAL.has(s) ? false : 2000;
+      if (s && TERMINAL.has(s)) return false;
+      // WS is the primary feed; poll slowly as belt-and-braces.
+      return stream.connected ? 15_000 : 2_000;
     },
   });
+
+  // Whenever the WS reports a status change, force a re-fetch of the detail
+  // so the payload + linked SiteModel update too.
+  useEffect(() => {
+    if (!id || !stream.lastStatus) return;
+    qc.invalidateQueries({ queryKey: ["run", id] });
+  }, [id, stream.lastStatus, qc]);
 
   if (q.isLoading) {
     return <p className="text-sm text-zinc-500">Loading…</p>;
@@ -52,6 +68,7 @@ export default function RunDetailPage() {
         <div className="mt-1 flex items-center gap-3">
           <h1 className="font-mono text-xl">{r.mcp_context_id}</h1>
           <StatusBadge status={r.status} />
+          <LiveIndicator connected={stream.connected} />
         </div>
         <p className="text-xs text-zinc-500">
           {r.agent} · {r.agent_version || "unversioned"} ·{" "}
@@ -119,5 +136,27 @@ function Json({ value }: { value: unknown }) {
     <pre className="overflow-x-auto rounded bg-zinc-50 p-3 text-xs text-zinc-700">
       {JSON.stringify(value, null, 2)}
     </pre>
+  );
+}
+
+function LiveIndicator({ connected }: { connected: boolean }) {
+  return (
+    <span
+      className={
+        "inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide " +
+        (connected
+          ? "bg-emerald-50 text-emerald-700"
+          : "bg-zinc-100 text-zinc-500")
+      }
+      title={connected ? "WebSocket connected" : "Polling"}
+    >
+      <span
+        className={
+          "h-1.5 w-1.5 rounded-full " +
+          (connected ? "bg-emerald-500" : "bg-zinc-400")
+        }
+      />
+      {connected ? "live" : "polling"}
+    </span>
   );
 }
