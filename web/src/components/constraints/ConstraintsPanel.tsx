@@ -12,6 +12,8 @@
  */
 
 import { useMemo, useState } from "react";
+import { ConstraintForm } from "./ConstraintForm";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { ConstraintItem, ConstraintKind, ValidationIssue } from "@/lib/types";
@@ -34,10 +36,11 @@ interface Props {
   siteModelId: string;
 }
 
-export function ConstraintsPanel({ siteModelId }: Props) {
+
   const [kindFilter, setKindFilter] = useState<ConstraintKind | "all">("all");
   const [activeOnly, setActiveOnly] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState<ConstraintKind | null>(null);
 
   const listQ = useQuery({
     queryKey: ["constraints", siteModelId, activeOnly],
@@ -52,6 +55,22 @@ export function ConstraintsPanel({ siteModelId }: Props) {
   });
 
   const items = listQ.data?.items ?? [];
+  // 自动聚合所有资产名
+  const allAssets = useMemo(() => {
+    const s = new Set<string>();
+    for (const i of items) {
+      if (i.kind === "predecessor") {
+        s.add(i.payload.from); s.add(i.payload.to);
+      } else if (i.kind === "resource") {
+        for (const a of i.payload.asset_ids) s.add(a);
+      } else if (i.kind === "takt") {
+        s.add(i.payload.asset_id);
+      } else if (i.kind === "exclusion") {
+        for (const a of i.payload.asset_ids) s.add(a);
+      }
+    }
+    return Array.from(s).sort();
+  }, [items]);
   const filtered = useMemo(
     () => (kindFilter === "all" ? items : items.filter((i) => i.kind === kindFilter)),
     [items, kindFilter],
@@ -87,6 +106,17 @@ export function ConstraintsPanel({ siteModelId }: Props) {
     if (hit) setSelectedId(hit.constraint_id);
   };
 
+  // 新建约束 mutation
+  const qc = useQueryClient();
+  const createMut = useMutation({
+    mutationFn: (data: any) => api.createConstraint(siteModelId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["constraints", siteModelId] });
+      qc.invalidateQueries({ queryKey: ["constraints-validate", siteModelId] });
+      setShowCreate(null);
+    },
+  });
+
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr_360px] gap-3 overflow-hidden p-3">
       <LeftFilter
@@ -95,6 +125,7 @@ export function ConstraintsPanel({ siteModelId }: Props) {
         onKindChange={setKindFilter}
         activeOnly={activeOnly}
         onActiveOnlyChange={setActiveOnly}
+        onCreate={setShowCreate}
       />
       <Center
         items={filtered}
@@ -109,6 +140,28 @@ export function ConstraintsPanel({ siteModelId }: Props) {
         onSelectAsset={handleSelectAsset}
       />
       <RightDetail item={selected} />
+
+      {/* 新建约束弹窗 */}
+      {showCreate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20">
+          <div className="rounded bg-white p-4 shadow-xl min-w-[340px] max-w-[96vw]">
+            <div className="mb-2 font-bold text-[15px]">新建约束 · {KIND_META[showCreate].label}</div>
+            <ConstraintForm
+              kind={showCreate}
+              assets={allAssets}
+              onSubmit={(data) => createMut.mutate({
+                constraint_id: `cst_${Date.now()}`,
+                payload: { ...data, kind: showCreate },
+                priority: data.priority ?? 1,
+                is_active: data.is_active ?? true,
+              })}
+              onCancel={() => setShowCreate(null)}
+            />
+            {createMut.isPending && <div className="text-xs text-zinc-400 mt-2">提交中…</div>}
+            {createMut.error && <div className="text-xs text-rose-500 mt-2">{String(createMut.error)}</div>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -116,13 +169,14 @@ export function ConstraintsPanel({ siteModelId }: Props) {
 // ── Left filter ───────────────────────────────────────────────────────
 
 function LeftFilter({
-  counts, kindFilter, onKindChange, activeOnly, onActiveOnlyChange,
+  counts, kindFilter, onKindChange, activeOnly, onActiveOnlyChange, onCreate,
 }: {
   counts: Record<ConstraintKind | "all", number>;
   kindFilter: ConstraintKind | "all";
   onKindChange: (k: ConstraintKind | "all") => void;
   activeOnly: boolean;
   onActiveOnlyChange: (v: boolean) => void;
+  onCreate: (k: ConstraintKind) => void;
 }) {
   const KINDS: (ConstraintKind | "all")[] = ["all", "predecessor", "resource", "takt", "exclusion"];
   return (
@@ -168,8 +222,20 @@ function LeftFilter({
         </label>
       </div>
 
-      <div className="mt-auto rounded border border-dashed border-zinc-200 px-2 py-2 text-[11px] leading-relaxed text-zinc-400">
-        新建 / 编辑约束 · 即将上线
+      <div className="mt-auto flex flex-col gap-1 rounded border border-dashed border-zinc-200 px-2 py-2 text-[11px] leading-relaxed text-zinc-400">
+        <div>新建约束：</div>
+        <div className="flex flex-wrap gap-1 mt-1">
+          {(["predecessor", "resource", "takt", "exclusion"] as ConstraintKind[]).map((k) => (
+            <button
+              key={k}
+              type="button"
+              className="rounded bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700 border border-violet-200 hover:bg-violet-100"
+              onClick={() => onCreate(k)}
+            >
+              {KIND_META[k].icon} {KIND_META[k].label}
+            </button>
+          ))}
+        </div>
       </div>
     </aside>
   );
