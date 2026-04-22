@@ -5,12 +5,15 @@
 // status + connection state to the caller. Auto-reconnects with capped
 // exponential backoff while the run is non-terminal.
 //
-// Auth: cookies (Set-Cookie from /auth/login-cookie) are sent automatically
-// by the browser on the WS handshake — no header gymnastics required. The
-// backend's WS handler accepts cookies in addition to X-Role.
+// Auth: Browsers cannot set custom headers on a WebSocket handshake, and
+// Next.js dev rewrites do NOT proxy WS upgrades, so we dial the backend
+// origin directly (NEXT_PUBLIC_API_BASE) and pass role+actor as query
+// params. In production behind a same-origin reverse proxy the env var is
+// unset and we fall back to ws[s]://<host>/api.
 
 import { useEffect, useRef, useState } from "react";
 import type { RunStatus, WsRunFrame } from "./types";
+import { getRole, getActor } from "./api";
 
 const TERMINAL = new Set<string>(["SUCCESS", "SUCCESS_WITH_WARNINGS", "ERROR"]);
 const MAX_BACKOFF_MS = 15_000;
@@ -40,10 +43,24 @@ export function useRunStream(runId: string | null | undefined): RunStreamState {
 
     const connect = () => {
       if (stoppedRef.current) return;
-      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const url = `${proto}//${window.location.host}/api/dashboard/runs/${encodeURIComponent(
+      // Resolve WS origin. In dev, NEXT_PUBLIC_API_BASE points at the FastAPI
+      // backend (e.g. http://localhost:8000) — we dial it directly because
+      // Next.js dev rewrites do NOT proxy WebSocket upgrades. In prod the env
+      // var is unset and we fall back to same-origin behind the reverse proxy.
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || "";
+      let wsOrigin: string;
+      if (apiBase) {
+        wsOrigin = apiBase.replace(/^http/i, "ws").replace(/\/$/, "");
+      } else {
+        const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+        wsOrigin = `${proto}//${window.location.host}/api`;
+      }
+      // Browsers can't set custom headers on a WebSocket handshake, so we
+      // pass role/actor as query params; the backend accepts both forms.
+      const qs = new URLSearchParams({ role: getRole(), actor: getActor() });
+      const url = `${wsOrigin}/dashboard/runs/${encodeURIComponent(
         runId,
-      )}/stream`;
+      )}/stream?${qs.toString()}`;
       let ws: WebSocket;
       try {
         ws = new WebSocket(url);

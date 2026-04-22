@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-cn">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MLightCAD 预览</title>
+    <!-- Locally-bundled Element Plus + MLightCAD CSS (no CDN). -->
+    <link rel="stylesheet" href="/mlight/bundle.css" />
+    <style>
+      html, body, #app { margin: 0; height: 100%; width: 100%; overflow: hidden; }
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+             "Microsoft YaHei", sans-serif; background: #ffffff; color: #18181b; }
+      #boot {
+        position: absolute; inset: 0; display: flex; align-items: center;
+        justify-content: center; flex-direction: column; gap: 12px;
+        font-size: 13px; color: #52525b; z-index: 1; pointer-events: none;
+      }
+      .spinner {
+        width: 32px; height: 32px; border-radius: 50%;
+        border: 3px solid #e4e4e7; border-top-color: #6366f1;
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .err { color: #b91c1c; font-family: ui-monospace, SFMono-Regular, monospace;
+             font-size: 12px; padding: 12px; max-width: 640px; text-align: center;
+             pointer-events: auto; }
+    </style>
+  </head>
+  <body>
+    <div id="boot">
+      <div class="spinner"></div>
+      <div>MLightCAD 引擎加载中… <span id="phase">下载本地 bundle</span></div>
+      <div style="font-size:11px;color:#a1a1aa">本地构建 · 4.1MB · 无外部 CDN 依赖</div>
+    </div>
+    <div id="app"></div>
+
+    <!--
+      Standalone Vue 3 + MLightCAD page meant to be embedded as an <iframe>
+      from the React/Next.js dashboard. It reads ?url=<DXF URL> from the
+      query string, fetches it (cookies included since same-origin), then
+      hands the resulting File object to MlCadViewer's `local-file` prop.
+
+      The Vue app + element-plus + @mlightcad/cad-viewer + cad-simple-viewer
+      are all bundled by scripts/build-mlight.mjs into /mlight/bundle.{js,css}
+      so this page works fully offline (no esm.sh / esm.run round-trips).
+    -->
+    <script type="module">
+      const params = new URLSearchParams(location.search);
+      const url = params.get("url");
+      const phase = document.getElementById("phase");
+      const boot = document.getElementById("boot");
+
+      const fail = (msg) => {
+        boot.innerHTML = `<div class="err"><b>MLightCAD 加载失败</b><br/>${
+          String(msg).replace(/[<>]/g, (c) => ({ "<": "&lt;", ">": "&gt;" }[c]))
+        }<br/><br/><span style="color:#71717a;font-size:11px">请检查浏览器控制台，或切换回 dxf-viewer。</span></div>`;
+      };
+
+      if (!url) {
+        fail("缺少 ?url=<dxf-url> 参数");
+      } else {
+        try {
+          phase.textContent = "下载本地 bundle";
+          // window.__mlight is exposed by /mlight/bundle.js after import.
+          await import("/mlight/bundle.js");
+          if (!window.__mlight?.mount) throw new Error("bundle 未导出 __mlight.mount");
+
+          phase.textContent = "下载 DXF";
+          // Same-origin to the dashboard. We inherit cookies automatically,
+          // but the dev backend's `_viewer_or_above` dependency also accepts
+          // the legacy `X-Role` / `X-Actor` headers (M1 trust-the-header
+          // path) — the React app's api.ts always sends them, so we mirror
+          // that here. Otherwise: cookie session may be absent in dev → 401.
+          const role = (() => {
+            try {
+              const v = localStorage.getItem("proline.role");
+              return v && /^(viewer|operator|reviewer|admin)$/.test(v) ? v : "viewer";
+            } catch { return "viewer"; }
+          })();
+          const actor = (() => {
+            try { return localStorage.getItem("proline.actor") || "anonymous@dev"; }
+            catch { return "anonymous@dev"; }
+          })();
+          const r = await fetch(url, {
+            credentials: "include",
+            headers: { "X-Role": role, "X-Actor": actor },
+          });
+          if (!r.ok) throw new Error(`下载 DXF 失败 HTTP ${r.status}`);
+          const blob = await r.blob();
+          const name = (() => {
+            try {
+              const u = new URL(url, location.origin);
+              const tail = u.pathname.split("/").pop() || "drawing.dxf";
+              if (/\.(dxf|dwg)$/i.test(tail)) return tail;
+            } catch {}
+            return "drawing.dxf";
+          })();
+          const file = new File([blob], name, { type: "application/dxf" });
+
+          phase.textContent = "解析 + 渲染";
+          window.__mlight.mount(document.getElementById("app"), file, {
+            background: 0xffffff,
+            locale: "zh",
+          });
+
+          // Hide bootstrap overlay once Vue has mounted.
+          requestAnimationFrame(() => {
+            setTimeout(() => boot.remove(), 250);
+          });
+        } catch (e) {
+          console.error("[mlight-viewer]", e);
+          fail(e?.message || String(e));
+        }
+      }
+    </script>
+  </body>
+</html>

@@ -120,6 +120,68 @@ def get_run(
     return RunDetail.model_validate(detail)
 
 
+# ── GET /dashboard/runs/{id}/cad ───────────────────────────────────────
+@router.get(
+    "/runs/{mcp_context_id}/cad",
+    summary="Stream the run's DXF for browser-side preview (dxf-viewer)",
+    response_class=None,  # FileResponse handles its own content-type
+)
+def get_run_cad(
+    mcp_context_id: str,
+    db: Session = Depends(_db_viewer),
+    _user: CurrentUser = Depends(_viewer_or_above),
+):
+    """Return the DXF file for this run.
+
+    Lookup order:
+      1. site_models.cad_source.converted_dxf_path  (set when the worker
+         converted DWG → DXF via ODA)
+      2. mcp_contexts.input_payload.upload_path     (when the upload itself
+         was already DXF)
+    """
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+
+    detail = runs_service.get_run_detail(db, mcp_context_id)
+    if detail is None:
+        raise AppError(
+            error_code="NOT_FOUND",
+            message=f"Run '{mcp_context_id}' not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            mcp_context_id=mcp_context_id,
+        )
+    cad_source = detail.get("site_model_cad_source") or {}
+    input_payload = detail.get("input_payload") or {}
+
+    candidate: str | None = None
+    converted = cad_source.get("converted_dxf_path")
+    if converted and Path(converted).is_file():
+        candidate = converted
+    else:
+        upload = input_payload.get("upload_path")
+        detected = (cad_source.get("detected_format") or "").lower()
+        if upload and detected == "dxf" and Path(upload).is_file():
+            candidate = upload
+
+    if not candidate:
+        raise AppError(
+            error_code="CAD_PREVIEW_UNAVAILABLE",
+            message=(
+                "No DXF available for this run. DWG conversion may have "
+                "failed, or the source format is not DXF/DWG."
+            ),
+            status_code=status.HTTP_404_NOT_FOUND,
+            mcp_context_id=mcp_context_id,
+        )
+
+    METRICS.dashboard_runs_total.labels(event="cad_streamed").inc()
+    return FileResponse(
+        candidate,
+        media_type="application/dxf",
+        filename=f"{mcp_context_id}.dxf",
+    )
+
+
 # ── POST /dashboard/runs ───────────────────────────────────────────────
 @router.post(
     "/runs",
@@ -197,10 +259,18 @@ async def stream_run(
     start_cdc_consumer.py).
 
     Auth: WebSocket protocols don't fire FastAPI HTTP dependencies cleanly,
-    so we accept first then validate the X-Role header from the handshake;
-    invalid -> 1008 close.
+    so we accept first then validate identity from the handshake.
+
+    Browsers cannot set custom headers on a WebSocket, and Next.js dev
+    rewrites do not proxy WS upgrades, so we also accept ``role`` (+ optional
+    ``actor``) as query params for cross-origin dev. In production behind a
+    reverse-proxy that forwards the cookie, the existing X-Role header path
+    keeps working.
     """
-    role_hdr = websocket.headers.get("x-role", "").strip().lower()
+    role_hdr = (
+        websocket.headers.get("x-role", "")
+        or websocket.query_params.get("role", "")
+    ).strip().lower()
     from app.deps import ROLES  # local import to avoid circular at module import time
     if role_hdr not in ROLES:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
