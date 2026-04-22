@@ -21,7 +21,7 @@ export default function QuarantinePage() {
   });
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-6">
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Quarantine</h1>
         <div className="flex items-center gap-2 text-xs">

@@ -106,12 +106,18 @@ import type {
   AuthIdentity,
   LoginCookieRequest,
   LoginCookieResponse,
+  ConstraintCreateRequest,
+  ConstraintItem,
+  ConstraintKind,
+  ConstraintListResponse,
+  ConstraintUpdateRequest,
   QuarantineDecideRequest,
   QuarantineDecideResponse,
   QuarantineListResponse,
   RunCreatedResponse,
   RunDetail,
   RunListResponse,
+  ValidationReport,
 } from "./types";
 
 export const api = {
@@ -126,6 +132,8 @@ export const api = {
       body: fd,
     });
   },
+  deleteRun: (id: string) =>
+    request<void>(`/dashboard/runs/${id}`, { method: "DELETE" }),
   listQuarantine: (
     opts: { page?: number; pageSize?: number; status?: string; assetType?: string } = {},
   ) => {
@@ -144,6 +152,45 @@ export const api = {
         body: JSON.stringify(body),
         headers: { "Content-Type": "application/json" },
       },
+    ),
+
+  // ── Phase 2.3 process_constraints ──────────────────────────────────
+  listConstraints: (
+    siteModelId: string,
+    opts: { page?: number; pageSize?: number; kind?: ConstraintKind; activeOnly?: boolean } = {},
+  ) => {
+    const p = new URLSearchParams();
+    p.set("page", String(opts.page ?? 1));
+    p.set("page_size", String(opts.pageSize ?? 200));
+    if (opts.kind) p.set("kind", opts.kind);
+    if (opts.activeOnly === false) p.set("active_only", "false");
+    return request<ConstraintListResponse>(
+      `/sites/${encodeURIComponent(siteModelId)}/constraints?${p.toString()}`,
+    );
+  },
+  createConstraint: (siteModelId: string, body: ConstraintCreateRequest) =>
+    request<ConstraintItem>(`/sites/${encodeURIComponent(siteModelId)}/constraints`, {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "Content-Type": "application/json" },
+    }),
+  updateConstraint: (siteModelId: string, constraintId: string, body: ConstraintUpdateRequest) =>
+    request<ConstraintItem>(
+      `/sites/${encodeURIComponent(siteModelId)}/constraints/${encodeURIComponent(constraintId)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json" },
+      },
+    ),
+  deleteConstraint: (siteModelId: string, constraintId: string) =>
+    request<void>(
+      `/sites/${encodeURIComponent(siteModelId)}/constraints/${encodeURIComponent(constraintId)}`,
+      { method: "DELETE" },
+    ),
+  validateConstraints: (siteModelId: string) =>
+    request<ValidationReport>(
+      `/sites/${encodeURIComponent(siteModelId)}/constraints/validate`,
     ),
 };
 

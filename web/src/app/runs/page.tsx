@@ -24,7 +24,7 @@ export default function RunsPage() {
   });
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-6">
       <header className="flex items-baseline justify-between">
         <h1 className="text-2xl font-semibold">ParseAgent runs</h1>
         {q.data && (

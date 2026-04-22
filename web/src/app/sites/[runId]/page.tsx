@@ -3,15 +3,12 @@
 import { useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { LLMEnrichment, RunDetail } from "@/lib/types";
 import { Icon, type IconName } from "@/components/icons";
 import { StatusBadge } from "@/components/StatusBadge";
-
-// dxf-viewer pulls in Three.js → keep it client-only and out of the SSR bundle.
-const DxfPreview = dynamic(() => import("@/components/DxfPreview"), { ssr: false });
+import { ConstraintsPanel } from "@/components/constraints/ConstraintsPanel";
 
 // ── Top workflow tabs ────────────────────────────────────────────────
 const STAGES: { key: string; label: string; icon: IconName; enabled: boolean; desc: string }[] = [
@@ -81,11 +78,19 @@ export default function SiteWorkspacePage() {
 
       {/* Stage body */}
       {activeStage === "S1" ? (
-        <div className="grid flex-1 grid-cols-[260px_1fr_320px] gap-3 overflow-hidden p-3">
+        <div className="grid min-h-0 flex-1 grid-cols-[260px_1fr_320px] grid-rows-[1fr] gap-3 overflow-hidden p-3">
           <LeftSidebar run={run} selected={selectedClusterId} onSelect={setSelectedClusterId} />
           <CenterCanvas run={run} selected={selectedClusterId} onSelect={setSelectedClusterId} />
           <RightPanel run={run} selected={selectedClusterId} />
         </div>
+      ) : activeStage === "S2" ? (
+        run.site_model_id ? (
+          <ConstraintsPanel siteModelId={run.site_model_id} />
+        ) : (
+          <div className="flex flex-1 items-center justify-center p-8 text-[12px] text-zinc-400">
+            该 Run 尚未生成 site_model_id，无法编辑工艺约束。
+          </div>
+        )
       ) : (
         <StageComingSoon stage={STAGES.find((s) => s.key === activeStage)!} />
       )}
@@ -253,7 +258,7 @@ function CenterCanvas({
   const enrich = getEnrichment(run);
 
   return (
-    <main className="flex flex-col gap-2 overflow-hidden">
+    <main className="flex min-h-0 min-w-0 flex-col gap-2 overflow-hidden">
       {/* Sub-tabs */}
       <div className="flex items-center gap-1 rounded border border-zinc-200 bg-white px-1 py-1">
         <SubTab active={tab === "viewer"} onClick={() => setTab("viewer")} icon="layers" label="原始文件预览" />
@@ -320,21 +325,13 @@ function ViewerView({ run }: { run: RunDetail }) {
       String((run.input_payload as any)?.filename || "").toLowerCase().endsWith(".dwg"),
   );
   const dxfUrl = `/api/dashboard/runs/${run.mcp_context_id}/cad`;
-  const [dxfFailed, setDxfFailed] = useState<string | null>(null);
-  // Engine toggle: dxf-viewer (lightweight, react-native, ours) vs MLightCAD
-  // (Vue 3 + Element Plus, embedded as iframe via /mlight-viewer.html). The
-  // toggle is intentionally exposed in the toolbar so leadership can A/B
-  // compare the two open-source options before we commit to one.
-  // Default to MLightCAD: it handles outlier-extents and 100MB+ DWG-converted
-  // DXFs more gracefully (built-in zoom-extents/layer manager). dxf-viewer's
-  // FitView zooms to full bounds → real drawing becomes <1px on dirty files.
-  const [engine, setEngine] = useState<"dxf" | "mlight">("mlight");
-  // Toggle visibility / MLightCAD iframe must NOT depend on dxfFailed —
-  // MLightCAD is a fully independent iframe; if dxf-viewer crashes the user
-  // still needs to be able to switch over to it.
+  // Renderer: MLightCAD (Vue 3 + WebAssembly) embedded as an iframe via
+  // /mlight-viewer.html. We previously A/B'd against `dxf-viewer` (Three.js)
+  // but it rendered blank on this dataset (#FFFFFF entities + colorCorrection
+  // edge cases) and zoom-extents was unusable on outlier bboxes. MLightCAD
+  // handles both cleanly, so we standardize on it.
   const cadReady = cadAvailable && !previewUrl;
-  // Only the dxf-viewer branch falls back to the schematic on failure.
-  const useRealCad = cadReady && !(engine === "dxf" && dxfFailed);
+  const useRealCad = cadReady;
 
   // Hand-rolled pan/zoom for the schematic viewport.
   const [view, setView] = useState({ tx: 0, ty: 0, k: 1 });
@@ -433,7 +430,7 @@ function ViewerView({ run }: { run: RunDetail }) {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-2 overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
       {/* Toolbar */}
       <div className="flex items-center gap-2 rounded border border-zinc-200 bg-white px-2 py-1 text-[11px] text-zinc-500">
         <Icon name="file-text" size={13} className="text-zinc-400" />
@@ -448,32 +445,10 @@ function ViewerView({ run }: { run: RunDetail }) {
         )}
         <div className="ml-auto flex items-center gap-1">
           {cadReady && (
-            <div className="mr-2 flex items-center gap-0 overflow-hidden rounded border border-zinc-200 text-[10px]">
-              <button
-                onClick={() => setEngine("dxf")}
-                className={
-                  "px-2 py-0.5 " +
-                  (engine === "dxf"
-                    ? "bg-violet-600 text-white"
-                    : "bg-white text-zinc-600 hover:bg-zinc-50")
-                }
-                title="dxf-viewer · 轻量 · React 原生 · 仅渲染"
-              >
-                dxf-viewer
-              </button>
-              <button
-                onClick={() => setEngine("mlight")}
-                className={
-                  "border-l border-zinc-200 px-2 py-0.5 " +
-                  (engine === "mlight"
-                    ? "bg-violet-600 text-white"
-                    : "bg-white text-zinc-600 hover:bg-zinc-50")
-                }
-                title="MLightCAD · 完整 UI · 图层/命令行 · iframe 嵌入"
-              >
-                MLightCAD
-              </button>
-            </div>
+            <span className="mr-2 inline-flex items-center gap-1 rounded border border-zinc-200 bg-white px-2 py-0.5 text-[10px] text-zinc-600">
+              <Icon name="layers" size={10} className="text-violet-500" />
+              MLightCAD
+            </span>
           )}
           <button onClick={() => setView((v) => ({ ...v, k: Math.min(8, v.k * 1.2) }))} className="rounded px-1.5 py-0.5 hover:bg-zinc-100">+</button>
           <span className="font-mono">{Math.round(view.k * 100)}%</span>
@@ -484,22 +459,16 @@ function ViewerView({ run }: { run: RunDetail }) {
 
       {/* Viewer body */}
       <div className="relative flex-1 overflow-hidden rounded border border-zinc-200 bg-white">
-        {cadReady && engine === "mlight" ? (
-          // MLightCAD path: independent iframe, never falls back to schematic.
+        {useRealCad ? (
+          // MLightCAD path: independent iframe (Vue 3 + WebAssembly).
+          // Same-origin so cookies + module scripts + worker work; sandbox
+          // intentionally NOT set.
           <iframe
             key={dxfUrl /* force reload if file changes */}
             src={`/mlight-viewer.html?url=${encodeURIComponent(dxfUrl)}`}
             className="h-full w-full border-0"
             title="MLightCAD viewer"
-            // sandbox intentionally NOT set: MLightCAD needs same-origin
-            // cookies + module scripts + worker. Same-origin so this is safe.
             allow="clipboard-write"
-          />
-        ) : useRealCad ? (
-          <DxfPreview
-            src={dxfUrl}
-            className="h-full w-full"
-            onError={(msg) => setDxfFailed(msg)}
           />
         ) : previewUrl ? (
           // Real preview asset path (backend-provided SVG/PNG): direct render.
@@ -567,15 +536,9 @@ function ViewerView({ run }: { run: RunDetail }) {
               <div className="flex items-start gap-1.5">
                 <Icon name="info" size={12} className="mt-0.5 shrink-0" />
                 <div>
-                  <div className="font-semibold">
-                    {dxfFailed ? "DXF 渲染回退至示意图" : "示意图，非真实 CAD 渲染"}
-                  </div>
+                  <div className="font-semibold">示意图，非真实 CAD 渲染</div>
                   <div className="leading-snug">
-                    {dxfFailed ? (
-                      <>真实 DXF 加载失败 (<span className="font-mono">{dxfFailed}</span>)，已回退到 bounding_box + entity_counts 概率撒点示意图。</>
-                    ) : (
-                      <>基于 bounding_box + entity_counts 按类型概率撒点，仅用于"看出图纸有多大、密度高低"。后端未提供 DXF (旧 run / 非 CAD 输入) — 重新上传可启用真实渲染。</>
-                    )}
+                    基于 bounding_box + entity_counts 按类型概率撒点，仅用于"看出图纸有多大、密度高低"。后端未提供 DXF (旧 run / 非 CAD 输入) — 重新上传可启用真实渲染。
                   </div>
                 </div>
               </div>
@@ -610,28 +573,16 @@ function ViewerView({ run }: { run: RunDetail }) {
         <Icon name="circle-dot" size={11} className={useRealCad ? "text-emerald-500" : "text-zinc-400"} />
         <span>
           {useRealCad
-            ? engine === "mlight"
-              ? "原始文件预览 · DXF (MLightCAD)"
-              : "原始文件预览 · DXF (dxf-viewer)"
+            ? "原始文件预览 · DXF (MLightCAD)"
             : "原始文件预览 · 示意图 (schematic)"}
         </span>
         <span>·</span>
         <span>实体 {stats.entity_total ?? "—"}</span>
         <span>·</span>
         <span>图层 {stats.layer_count ?? "—"}</span>
-        {cadReady && (
-          <>
-            <span>·</span>
-            <span className="text-zinc-400">
-              渲染引擎对比 — 工具栏右上角可切换 (dxf-viewer ↔ MLightCAD)
-            </span>
-          </>
-        )}
         <span className="ml-auto italic text-zinc-400">
           {useRealCad
-            ? engine === "mlight"
-              ? "MLightCAD · Vue 3 + WebAssembly · iframe 嵌入"
-              : "鼠标滚轮缩放 · 拖拽平移 (Three.js)"
+            ? "MLightCAD · Vue 3 + WebAssembly · iframe 嵌入"
             : "滚轮缩放 · 拖拽平移"}
         </span>
       </div>

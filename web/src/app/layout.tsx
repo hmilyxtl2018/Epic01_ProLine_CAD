@@ -19,11 +19,14 @@ export default function RootLayout({
       <body className="min-h-screen text-zinc-900 antialiased">
         <Providers>
           <header className="border-b bg-white">
-            <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
-              <Link href="/runs" className="font-semibold tracking-tight">
-                ProLine · Dashboard
+            <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+              <Link href="/sites" className="font-semibold tracking-tight">
+                ProLine CAD
               </Link>
               <nav className="flex items-center gap-6 text-sm">
+                <Link href="/sites" className="hover:underline">
+                  Sites
+                </Link>
                 <Link href="/runs" className="hover:underline">
                   Runs
                 </Link>
@@ -34,7 +37,7 @@ export default function RootLayout({
               </nav>
             </div>
           </header>
-          <main className="mx-auto max-w-6xl px-6 py-6">{children}</main>
+          <main>{children}</main>
         </Providers>
       </body>
     </html>
