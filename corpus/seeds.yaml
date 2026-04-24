@@ -1,0 +1,124 @@
+# Aerospace Constraint Corpus — Seed Sources (MVP, 6 items)
+#
+# 严格遵守 ADR-0006 (权威模型) + ADR-0007 (Corpus / MinIO 布局)：
+# · 本文件只登记**公开元数据**（标准号、名称、发布机构、生效日期、官方索引 URL）
+# · 标准全文受 SAE International / IAQG / 国军标委员会版权保护，不 commit 进 Git
+# · clause_text 字段仅存 ≤ 2KB 的公开摘要/目的说明（官方简介），绝不粘贴受版权条款原文
+#
+# 映射：本文件的每条 source 在 sync 时 upsert 到 `constraint_sources` 表（0016 schema）
+# 并把本 YAML 自身上传到 MinIO 作为 doc_object_key 起点（后续 PDF 采购后补充 blobs[]）。
+
+schema_version: 1
+generated_for: "Epic01 ProLine CAD — constraint sources seed v1"
+
+sources:
+
+  # ═══════════════════════ AS9100D / IAQG 9100 ═══════════════════════
+  - source_id: src_as9100d_2016
+    title: "AS9100D — Quality Management Systems — Requirements for Aviation, Space and Defense Organizations"
+    authority: industry         # L1 — 行业强标（IAQG 全球通用）
+    issuing_body: "SAE International / IAQG"
+    version: "AS9100D:2016"
+    clause: null
+    clause_text: >-
+      Specifies requirements for a quality management system where an
+      organization needs to demonstrate its ability to consistently provide
+      product that meets customer and applicable statutory and regulatory
+      requirements in the aviation, space, and defense (AS&D) industries.
+      Supersedes AS9100C. Based on ISO 9001:2015 with AS&D-specific additions
+      on configuration management, counterfeit parts, product safety,
+      on-time delivery and risk.
+    effective_from: 2016-09-20
+    expires_at: null
+    tags: [qms, iaqg, iso9001-based, aviation-space-defense]
+    url_or_ref: "https://iaqg.org/standard/9100-qms-requirements-for-aviation-space-and-defense-organizations/"
+
+  # ═══════════════════════ AS9102B First Article Inspection ═══════════════════════
+  - source_id: src_as9102b_2014
+    title: "AS9102B — Aerospace First Article Inspection Requirement"
+    authority: industry
+    issuing_body: "SAE International / IAQG"
+    version: "AS9102B:2014"
+    clause: null
+    clause_text: >-
+      Establishes the documentation requirements for aerospace first article
+      inspection (FAI). A valid FAI provides objective evidence that all
+      engineering design and specification requirements are correctly
+      understood, accounted for, verified and recorded prior to
+      serial production. Applies to new product introduction, design
+      changes, tooling changes, process changes, and lapse > 2 years.
+    effective_from: 2014-10-01
+    expires_at: null
+    tags: [fai, first-article-inspection, npi, 制程首件]
+    url_or_ref: "https://www.sae.org/standards/content/as9102b/"
+
+  # ═══════════════════════ AS13004 PFMEA & Control Plans ═══════════════════════
+  - source_id: src_as13004_2021
+    title: "AS13004 — Process Failure Mode and Effects Analysis (PFMEA) and Control Plans"
+    authority: industry
+    issuing_body: "SAE International / AESQ (Aerospace Engine Supplier Quality)"
+    version: "AS13004:2021"
+    clause: null
+    clause_text: >-
+      Specifies the requirements for preparing Process FMEA and associated
+      Control Plans for aero-engine and associated equipment manufacturing
+      processes. Part of the AESQ suite that harmonizes supplier quality
+      requirements across Pratt & Whitney, Rolls-Royce, GE Aviation,
+      Safran and MTU. Requires linkage between PFMEA output (risks,
+      severity × occurrence × detection) and Control Plan features.
+    effective_from: 2021-03-01
+    expires_at: null
+    tags: [aesq, pfmea, control-plan, aero-engine, 工艺风险]
+    url_or_ref: "https://aesq.sae-itc.com/standards/index"
+
+  # ═══════════════════════ AS13100 AESQ QMS ═══════════════════════
+  - source_id: src_as13100_2021
+    title: "AS13100 — AESQ Quality Management System Requirements for Aero Engine Design and Production Organizations"
+    authority: industry
+    issuing_body: "SAE International / AESQ"
+    version: "AS13100:2021"
+    clause: null
+    clause_text: >-
+      Supplements AS9100 for aero-engine suppliers. Adds AESQ-specific
+      requirements on problem solving (8D-equivalent), inspection
+      frequency optimization, measurement systems analysis (MSA), PPAP
+      (production part approval process), and special-process control.
+      Replaces the patchwork of engine OEM quality supplements.
+    effective_from: 2021-02-01
+    expires_at: null
+    tags: [aesq, aero-engine, qms, ppap, 8d, msa]
+    url_or_ref: "https://aesq.sae-itc.com/standards/index"
+
+  # ═══════════════════════ GB/T 19001-2016 QMS (CN) ═══════════════════════
+  - source_id: src_gb_t_19001_2016
+    title: "GB/T 19001-2016 质量管理体系 要求"
+    authority: industry         # 推荐性国标，不是强制性法规
+    issuing_body: "国家市场监督管理总局 / 中国国家标准化管理委员会"
+    version: "GB/T 19001-2016"
+    clause: null
+    clause_text: >-
+      等同采用 ISO 9001:2015。规定了组织需要证实其有能力稳定地提供满足顾客
+      要求和适用法律法规要求的产品和服务时，对质量管理体系的要求，包括领导
+      作用、策划、支持、运行、绩效评价和改进。航空航天领域产品质量体系认证
+      的基础参照。
+    effective_from: 2017-07-01
+    expires_at: null
+    tags: [qms, gb, iso9001-eqv, 中国国标]
+    url_or_ref: "https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=E7BC68BAF2BE2C6DB99F45C8AACFE7B7"
+
+  # ═══════════════════════ GJB 9001C-2017 (Mil-CN) ═══════════════════════
+  - source_id: src_gjb_9001c_2017
+    title: "GJB 9001C-2017 质量管理体系要求"
+    authority: industry         # 军标在军工链条内实际强制，但严格 L0 保留给法律法规（适航）
+    issuing_body: "中央军委装备发展部（原总装备部）"
+    version: "GJB 9001C-2017"
+    clause: null
+    clause_text: >-
+      国军标在 GB/T 19001 / ISO 9001:2015 基础上，增加适用于国防军工产品
+      研制、生产、服务的附加要求：新产品鉴定、多余物控制、可靠性维修性保
+      障性（RMS）、软件工程化、技术状态管理、关键过程和特殊过程识别等。
+      航空航天军品链条上游供应商强制性体系认证依据。
+    effective_from: 2017-07-01
+    expires_at: null
+    tags: [qms, gjb, military, 多余物, 关键过程, 技术状态管理]
+    url_or_ref: "https://www.gjbgk.com/info/GJB9001C-2017"

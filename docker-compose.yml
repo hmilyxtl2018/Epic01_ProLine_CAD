@@ -5,24 +5,44 @@
 #   docker-compose down                   # 停止并移除
 
 services:
-  # ── PostgreSQL (SiteModel、mcp_context、audit) ──
+  # ── PostgreSQL HA (PostGIS + TimescaleDB + pgvector — 全栈) ──
+  # 镜像容量 ~2.1 GB（含所有扩展），首次 pull 耗时较长；
+  # 选用原因：迁移链 0002 (PostGIS) / 0003 (TimescaleDB) / 0006 (pgvector)
+  # 都能在本镜像里直接 `alembic upgrade head` 跑通，无需 stamp 跳过。
+  # 与 db/docker-compose.db.yml 镜像一致，保证 dev ⇄ CI 行为 parity。
+  # logical WAL + replication slots 预配置给 B5 CDC (Phase B)。
   postgres:
-    image: postgres:15-alpine
+    image: timescale/timescaledb-ha:pg16-all
     container_name: proline-postgres
     environment:
       POSTGRES_DB: proline_cad
       POSTGRES_USER: proline
       POSTGRES_PASSWORD: proline_dev
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+      - "-c"
+      - "max_replication_slots=4"
+      - "-c"
+      - "max_wal_senders=4"
+      - "-c"
+      - "shared_preload_libraries=timescaledb"
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # NOTE: HA 镜像的数据目录是 /home/postgres/pgdata/data
+      # (与 postgres:15-alpine 的 /var/lib/postgresql/data 不同)。
+      - postgres_data:/home/postgres/pgdata/data
       - ./db/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U proline -d proline_cad"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+
 
   # ── MinIO (对象存储 — proof artifacts、PDF、CAD 文件) ──
   minio:
@@ -36,7 +56,10 @@ services:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - minio_data:/data
+      # ADR-0007: bind-mount to host so blobs are visible & recoverable
+      # by `scripts/sync_corpus_to_minio.py` — dev-only; prod uses Vault/K8s.
+      - ./.data/minio:/data
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
@@ -103,6 +126,8 @@ services:
 
 volumes:
   postgres_data:
-  minio_data:
+  # minio_data removed per ADR-0007 — MinIO now bind-mounts to ./.data/minio
   blazegraph_data:
   milvus_data:
+
+
