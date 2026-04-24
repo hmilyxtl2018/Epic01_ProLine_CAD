@@ -25,7 +25,7 @@ from app.observability.metrics import METRICS  # noqa: F401  (forces registratio
 from app.observability.middleware import RequestContextMiddleware
 from app.observability.tracing import configure_tracing, instrument_app
 from app.queue import close_arq_pool, close_pubsub_redis
-from app.routers import auth, dashboard_runs, health, metrics, quarantine
+from app.routers import auth, constraints, dashboard_runs, health, metrics, quarantine
 
 
 @asynccontextmanager
@@ -83,6 +83,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router)
     app.include_router(dashboard_runs.router)
     app.include_router(quarantine.router)
+    app.include_router(constraints.router)
     return app
 
 

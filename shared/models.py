@@ -22,7 +22,12 @@ from pydantic import BaseModel, Field
 
 
 class AssetType(str, Enum):
-    """资产类型枚举。"""
+    """资产类型枚举。
+
+    14 个原始类型 + Phase 1.1 (2026-04-22) 新增 8 个产线常用类型，
+    覆盖冲压/焊接/装配/物流/工位/缓存六大类。新增类型须同步 0012 CHECK 迁移
+    与 shared/models.py 的 AssetType。详见 docs/ROADMAP_3D_SIM.md Phase 1。
+    """
     EQUIPMENT = "Equipment"
     CONVEYOR = "Conveyor"
     LIFTING_POINT = "LiftingPoint"
@@ -37,6 +42,15 @@ class AssetType(str, Enum):
     STORAGE_RACK = "StorageRack"
     ANNOTATION = "Annotation"
     OTHER = "Other"
+    # ── Phase 1.1: production-line domain types ──
+    STAMPING_PRESS = "StampingPress"          # 冲压机/压力机
+    WELDING_ROBOT = "WeldingRobot"            # 焊接机器人
+    HANDLING_ROBOT = "HandlingRobot"          # 搬运/上下料机器人
+    AGV = "Agv"                               # 自动导引车
+    BUFFER = "Buffer"                         # 缓存区/料仓
+    OPERATOR_STATION = "OperatorStation"     # 人工工位
+    INSPECTION_STATION = "InspectionStation"  # 检测工位
+    ROBOT_CELL = "RobotCell"                  # 机器人工作单元（围栏内）
 
 
 class ConstraintType(str, Enum):

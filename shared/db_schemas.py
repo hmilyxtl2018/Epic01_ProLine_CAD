@@ -493,6 +493,73 @@ class AuditLogAction(Base):
     )
 
 
+class ProcessConstraint(Base):
+    """Per-site_model 工艺约束 (Phase 2.2 / migration 0014).
+
+    Four `kind`s share one row shape; per-kind payload schema lives in
+    ``app/schemas/constraints.py`` and is validated at the API layer:
+
+    - ``predecessor`` ``{"from": asset_id, "to": asset_id}`` — DAG edge
+    - ``resource``    ``{"asset_ids": [...], "resource": str, "capacity": int}``
+    - ``takt``        ``{"asset_id": str, "min_s": float, "max_s": float}``
+    - ``exclusion``   ``{"asset_ids": [...], "reason": str}``
+    """
+
+    __tablename__ = "process_constraints"
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    constraint_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    site_model_id: Mapped[str] = mapped_column(
+        String(50),
+        ForeignKey("site_models.site_model_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    priority: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("50"))
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    created_by: Mapped[str | None] = mapped_column(String(100))
+    mcp_context_id: Mapped[str | None] = mapped_column(
+        String(100), ForeignKey("mcp_contexts.mcp_context_id")
+    )
+    schema_version: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("1"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('predecessor','resource','takt','exclusion')",
+            name="ck_proc_constraints_kind",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(payload) = 'object'",
+            name="ck_proc_constraints_payload_object",
+        ),
+        CheckConstraint(
+            "priority >= 0 AND priority <= 100",
+            name="ck_proc_constraints_priority_range",
+        ),
+        Index(
+            "idx_proc_constraints_site_kind",
+            "site_model_id",
+            "kind",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "idx_proc_constraints_payload_gin",
+            "payload",
+            postgresql_using="gin",
+        ),
+    )
+
+
 __all__ = [
     "Base",
     "metadata",
@@ -506,5 +573,6 @@ __all__ = [
     "TaxonomyTerm",
     "QuarantineTerm",
     "AuditLogAction",
+    "ProcessConstraint",
     "ASSET_TYPES",
 ]
