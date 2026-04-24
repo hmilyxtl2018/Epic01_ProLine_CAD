@@ -68,6 +68,17 @@ data/
 *.db
 *.sqlite3
 
+# ════════════════ Docker Volumes (local dev, per ADR-0007) ════════════════
+# All docker-compose bind-mount volumes live here — wipeable, rebuildable
+# via `scripts/init_minio.py` + `scripts/sync_corpus_to_minio.py`.
+/.data/
+
+# ════════════════ Constraint Corpus Blobs (copyrighted / large) ════════════════
+# Per ADR-0007: Git tracks metadata.yaml and ≤2KB clauses/*.txt only;
+# binary PDFs / full-text go to MinIO via sync scripts.
+/corpus/**/blobs/
+
+
 # ════════════════ Build Artifacts ════════════════
 node_modules/
 *.min.js

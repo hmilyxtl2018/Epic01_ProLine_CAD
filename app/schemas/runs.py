@@ -19,6 +19,10 @@ class RunSummary(BaseModel):
     status: str
     timestamp: datetime
     latency_ms: int = 0
+    # ── Source file metadata (mirrored from input_payload for list views) ──
+    filename: str | None = None
+    size_bytes: int | None = None
+    detected_format: str | None = None
 
 
 class RunListResponse(BaseModel):
@@ -36,6 +40,9 @@ class RunDetail(RunSummary):
     error_message: str | None = None
     site_model_id: str | None = None
     geometry_integrity_score: float | None = None
+    site_model_statistics: dict[str, Any] = Field(default_factory=dict)
+    site_model_cad_source: dict[str, Any] = Field(default_factory=dict)
+    site_model_assets_count: int = 0
 
 
 class RunCreatedResponse(BaseModel):

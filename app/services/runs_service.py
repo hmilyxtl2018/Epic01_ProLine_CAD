@@ -80,6 +80,7 @@ def get_run_detail(db: Session, mcp_context_id: str) -> dict[str, Any] | None:
         .where(SiteModel.mcp_context_id == mcp_context_id)
         .where(SiteModel.deleted_at.is_(None))
     )
+    payload = ctx.input_payload or {}
     return {
         "mcp_context_id": ctx.mcp_context_id,
         "agent": ctx.agent,
@@ -87,13 +88,19 @@ def get_run_detail(db: Session, mcp_context_id: str) -> dict[str, Any] | None:
         "status": ctx.status,
         "timestamp": ctx.timestamp,
         "latency_ms": ctx.latency_ms,
-        "input_payload": ctx.input_payload or {},
+        "filename": payload.get("filename"),
+        "size_bytes": payload.get("size_bytes"),
+        "detected_format": payload.get("detected_format"),
+        "input_payload": payload,
         "output_payload": ctx.output_payload or {},
         "error_message": ctx.error_message,
         "site_model_id": sm.site_model_id if sm else None,
         "geometry_integrity_score": (
             float(sm.geometry_integrity_score) if sm and sm.geometry_integrity_score is not None else None
         ),
+        "site_model_statistics": (sm.statistics or {}) if sm else {},
+        "site_model_cad_source": (sm.cad_source or {}) if sm else {},
+        "site_model_assets_count": len(sm.assets or []) if sm else 0,
     }
 
 
@@ -140,3 +147,67 @@ def create_run(
         "upload_path": str(target_path),
         "detected_format": validated.detected_format,
     }
+
+
+def delete_run(db: Session, mcp_context_id: str) -> bool:
+    """Hard-delete a run and ALL related rows + on-disk artefacts.
+
+    Returns True if a row was deleted, False if no such run exists.
+    Cascades through every table that holds an FK to mcp_contexts.
+    Caller is responsible for committing the session.
+    """
+    ctx = db.scalar(
+        select(McpContext).where(McpContext.mcp_context_id == mcp_context_id)
+    )
+    if ctx is None:
+        return False
+
+    # 1) Collect on-disk paths before we lose the row.
+    payload = ctx.input_payload or {}
+    upload_path = payload.get("upload_path")
+
+    sm = db.scalar(
+        select(SiteModel).where(SiteModel.mcp_context_id == mcp_context_id)
+    )
+    cad_source = (sm.cad_source if sm else {}) or {}
+    converted_path = cad_source.get("converted_dxf_path")
+
+    # 2) Delete child rows. Order matters because some tables FK to
+    #    site_models (asset_geometries) and others to mcp_contexts directly.
+    for stmt in (
+        "DELETE FROM asset_geometries WHERE mcp_context_id = :i",
+        "DELETE FROM layout_candidates WHERE mcp_context_id = :i",
+        "DELETE FROM constraint_sets WHERE mcp_context_id = :i",
+        "DELETE FROM site_models WHERE mcp_context_id = :i",
+        "DELETE FROM audit_log_actions WHERE mcp_context_id = :i",
+        "DELETE FROM quarantine_terms WHERE mcp_context_id = :i",
+        "DELETE FROM workflows WHERE mcp_context_id = :i",
+        "DELETE FROM mcp_contexts WHERE mcp_context_id = :i",
+    ):
+        db.execute(text(stmt), {"i": mcp_context_id})
+
+    # 3) Wipe the per-run upload directory (covers the original upload AND
+    #    the worker-produced .converted.dxf next to it).
+    run_dir = UPLOAD_ROOT / mcp_context_id
+    try:
+        if run_dir.exists() and run_dir.is_dir():
+            import shutil
+
+            shutil.rmtree(run_dir, ignore_errors=True)
+    except Exception:  # noqa: BLE001
+        # Best-effort cleanup; DB row is already gone.
+        pass
+
+    # 4) Belt-and-braces: if upload_path / converted_path point outside the
+    #    standard run_dir for some reason, try to remove them individually.
+    for p in (upload_path, converted_path):
+        if not p:
+            continue
+        try:
+            fp = Path(p)
+            if fp.is_file():
+                fp.unlink(missing_ok=True)
+        except Exception:  # noqa: BLE001
+            pass
+
+    return True

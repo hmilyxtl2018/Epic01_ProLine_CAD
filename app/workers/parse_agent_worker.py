@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import os
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -31,7 +32,9 @@ from sqlalchemy.orm import Session
 
 from app.observability.logging import configure_logging, get_logger
 from app.observability.metrics import METRICS
-from shared.db_schemas import McpContext
+from app.services.enrichment import run_enrichment
+from app.services.parse.cad_parser import ParseResult, parse_cad
+from shared.db_schemas import McpContext, SiteModel
 
 
 PARSE_AGENT_NAME = "ParseAgent"
@@ -78,13 +81,13 @@ def _claim_pending_run(db: Session) -> McpContext | None:
     return row
 
 
-def _do_parse(input_payload: dict[str, Any]) -> dict[str, Any]:
-    """M1 stub: validate the uploaded file is readable.
+def _do_parse(input_payload: dict[str, Any]) -> ParseResult:
+    """Run real CAD parsing on the uploaded file.
 
-    Returns an output_payload dict on success. Raises FileNotFoundError /
-    ValueError on failure -- caller maps to ERROR status.
-
-    M2 will replace this with a real call into ParseService.execute().
+    Returns a structured `ParseResult`. Raises `FileNotFoundError` /
+    `ValueError` only for catastrophic input issues (missing path /
+    missing file); recoverable parser issues are recorded as warnings
+    inside the result.
     """
     upload_path = input_payload.get("upload_path")
     if not upload_path:
@@ -92,15 +95,15 @@ def _do_parse(input_payload: dict[str, Any]) -> dict[str, Any]:
     p = Path(upload_path)
     if not p.exists():
         raise FileNotFoundError(f"upload file not found: {p}")
-    raw = p.read_bytes()
-    if not raw:
+    if p.stat().st_size == 0:
         raise ValueError(f"upload file is empty: {p}")
 
-    return {
-        "bytes_read": len(raw),
-        "filename": input_payload.get("filename"),
-        "parse_stub": True,  # remove in M2 when real parser lands
-    }
+    detected = (input_payload.get("detected_format") or p.suffix.lstrip(".")).lower()
+    return parse_cad(
+        path=p,
+        detected_format=detected,
+        filename=input_payload.get("filename") or p.name,
+    )
 
 
 def _finalize(
@@ -119,6 +122,184 @@ def _finalize(
     db.commit()
 
 
+# ── Semantic writeback (taxonomy lookup + quarantine inserts) ───────────
+
+_DEFAULT_QUARANTINE_ASSET_TYPE = "Other"
+
+
+def _classify_candidates(
+    db: Session, candidates: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split parser candidates into (gold-matched, quarantine-bound) lists.
+
+    Lookup is a single bulk SELECT against `taxonomy_terms` keyed by
+    `term_normalized` (gold or llm_promoted only).
+    """
+    if not candidates:
+        return [], []
+
+    norms = sorted({c["term_normalized"] for c in candidates if c.get("term_normalized")})
+    if not norms:
+        return [], []
+
+    gold_rows = db.execute(
+        text(
+            "SELECT term_normalized, term_display, asset_type "
+            "FROM taxonomy_terms "
+            "WHERE deleted_at IS NULL "
+            "  AND source IN ('gold','llm_promoted','manual') "
+            "  AND term_normalized = ANY(:norms)"
+        ),
+        {"norms": norms},
+    ).mappings().all()
+    gold_map = {r["term_normalized"]: dict(r) for r in gold_rows}
+
+    matched: list[dict[str, Any]] = []
+    quarantine: list[dict[str, Any]] = []
+    for c in candidates:
+        norm = c["term_normalized"]
+        if norm in gold_map:
+            hit = gold_map[norm]
+            matched.append({
+                "term_normalized": norm,
+                "term_display": hit["term_display"],
+                "asset_type": hit["asset_type"],
+                "count": c.get("count", 1),
+                "source": "taxonomy",
+            })
+        else:
+            quarantine.append({
+                "term_normalized": norm,
+                "term_display": c.get("term_display") or norm,
+                "asset_type": _DEFAULT_QUARANTINE_ASSET_TYPE,
+                "count": c.get("count", 1),
+                "evidence": c.get("evidence", []),
+            })
+    return matched, quarantine
+
+
+def _upsert_quarantine_terms(
+    db: Session, *, mcp_context_id: str, items: list[dict[str, Any]]
+) -> int:
+    """Insert quarantine_terms rows; on (term_normalized, asset_type)
+    conflict, bump count + extend evidence + refresh last_seen.
+    Returns inserted-or-updated row count.
+    """
+    if not items:
+        return 0
+    now = datetime.now(tz=timezone.utc)
+    n = 0
+    for it in items:
+        db.execute(
+            text(
+                """
+                INSERT INTO quarantine_terms (
+                    term_normalized, term_display, asset_type, count,
+                    evidence, first_seen, last_seen, decision, mcp_context_id
+                )
+                VALUES (
+                    :term_normalized, :term_display, :asset_type, :count,
+                    CAST(:evidence AS jsonb), :now, :now, 'pending', :mcp
+                )
+                ON CONFLICT (term_normalized, asset_type)
+                WHERE deleted_at IS NULL
+                DO UPDATE SET
+                    count = quarantine_terms.count + EXCLUDED.count,
+                    evidence = EXCLUDED.evidence,
+                    last_seen = EXCLUDED.last_seen
+                """
+            ),
+            {
+                "term_normalized": it["term_normalized"],
+                "term_display": it["term_display"],
+                "asset_type": it["asset_type"],
+                "count": int(it.get("count", 1)),
+                "evidence": _jsonb(it.get("evidence", [])),
+                "now": now,
+                "mcp": mcp_context_id,
+            },
+        )
+        n += 1
+    return n
+
+
+def _jsonb(obj: Any) -> str:
+    import json
+
+    return json.dumps(obj, ensure_ascii=False, default=str)
+
+
+def _write_site_model(
+    db: Session,
+    *,
+    mcp_context_id: str,
+    parse_result: ParseResult,
+    matched_terms: list[dict[str, Any]],
+    quarantine_count: int,
+) -> str:
+    """Insert a `site_models` row tied to this run. Returns site_model_id."""
+    site_model_id = f"sm_{uuid.uuid4().hex[:12]}"
+    summary = parse_result.summary or {}
+    statistics = {
+        "entity_counts": summary.get("entity_counts", {}),
+        "entity_total": summary.get("entity_total", 0),
+        "layer_count": summary.get("layer_count", 0),
+        "block_definition_count": summary.get("block_definition_count", 0),
+        "bounding_box": summary.get("bounding_box"),
+        "units": summary.get("units"),
+        "matched_terms_count": len(matched_terms),
+        "quarantine_terms_count": quarantine_count,
+        "warnings": parse_result.quality.get("parse_warnings", []),
+    }
+    cad_source = {
+        **(parse_result.fingerprint or {}),
+        "dxf_version": summary.get("dxf_version"),
+        "schema": summary.get("schema"),
+        # Set when the worker converted DWG → DXF; the dashboard streams this
+        # back to the browser for client-side rendering.
+        "converted_dxf_path": summary.get("converted_dxf_path"),
+    }
+    assets = matched_terms  # assets list seeded with taxonomy hits
+
+    bb = summary.get("bounding_box")
+    bbox_wkt: str | None = None
+    if bb and bb.get("min") and bb.get("max"):
+        x0, y0 = bb["min"][0], bb["min"][1]
+        x1, y1 = bb["max"][0], bb["max"][1]
+        if x1 > x0 and y1 > y0:
+            bbox_wkt = (
+                f"POLYGON(({x0} {y0}, {x1} {y0}, {x1} {y1}, {x0} {y1}, {x0} {y0}))"
+            )
+
+    db.execute(
+        text(
+            """
+            INSERT INTO site_models (
+                site_model_id, cad_source, assets, links,
+                geometry_integrity_score, statistics, mcp_context_id, bbox
+            )
+            VALUES (
+                :sid, CAST(:cad AS jsonb), CAST(:assets AS jsonb), CAST(:links AS jsonb),
+                :score, CAST(:stats AS jsonb), :mcp,
+                CASE WHEN :bbox_wkt IS NULL THEN NULL
+                     ELSE ST_GeomFromText(:bbox_wkt, 0) END
+            )
+            """
+        ),
+        {
+            "sid": site_model_id,
+            "cad": _jsonb(cad_source),
+            "assets": _jsonb(assets),
+            "links": _jsonb([]),
+            "score": float(parse_result.quality.get("confidence_score", 0.0)),
+            "stats": _jsonb(statistics),
+            "mcp": mcp_context_id,
+            "bbox_wkt": bbox_wkt,
+        },
+    )
+    return site_model_id
+
+
 # ── Public API ─────────────────────────────────────────────────────────
 
 def process_one(db: Session) -> str | None:
@@ -132,7 +313,7 @@ def process_one(db: Session) -> str | None:
     started = time.monotonic()
 
     try:
-        out = _do_parse(ctx.input_payload or {})
+        result = _do_parse(ctx.input_payload or {})
     except (FileNotFoundError, ValueError) as e:
         latency_ms = int((time.monotonic() - started) * 1000)
         _finalize(
@@ -149,17 +330,86 @@ def process_one(db: Session) -> str | None:
         )
         return run_id
 
+    # Section 3 — taxonomy lookup + quarantine inserts.
+    matched, quarantine = _classify_candidates(
+        db, result.semantics.get("candidates", [])
+    )
+    quarantine_inserted = _upsert_quarantine_terms(
+        db, mcp_context_id=run_id, items=quarantine
+    )
+
+    # Persist SiteModel (skips if no parsed content at all, keeping fingerprint-only runs valid).
+    site_model_id: str | None = None
+    if result.summary or matched or quarantine:
+        try:
+            site_model_id = _write_site_model(
+                db,
+                mcp_context_id=run_id,
+                parse_result=result,
+                matched_terms=matched,
+                quarantine_count=quarantine_inserted,
+            )
+        except Exception as e:  # noqa: BLE001 — degrade to SUCCESS_WITH_WARNINGS
+            log.warning(
+                "site_model_write_failed", run_id=run_id, error=str(e)
+            )
+            result.quality.setdefault("parse_warnings", []).append(
+                f"site_model_write_failed: {e}"
+            )
+
+    # Build output_payload: fingerprint + summary + semantics totals + quality.
+    output_payload = result.to_payload()
+    output_payload["semantics"] = {
+        "matched_terms": matched[:100],
+        "matched_terms_count": len(matched),
+        "quarantine_terms_count": quarantine_inserted,
+        "linked_site_model_id": site_model_id,
+    }
+
+    # ── LLM-assisted enrichment (steps A–M) ────────────────────────
+    try:
+        enrichment = run_enrichment(
+            db=db,
+            mcp_context_id=run_id,
+            fingerprint=result.fingerprint,
+            summary=result.summary,
+            candidates=result.semantics.get("candidates", []),
+            matched_terms=matched,
+            quarantine_terms=quarantine,
+            parse_warnings=result.quality.get("parse_warnings", []),
+            site_model_id=site_model_id,
+        )
+        output_payload["llm_enrichment"] = enrichment.to_dict()
+    except Exception as e:  # noqa: BLE001
+        log.warning("enrichment_failed", run_id=run_id, error=str(e))
+        output_payload["llm_enrichment"] = {
+            "sections": {},
+            "errors": {"pipeline": f"{type(e).__name__}: {e}"},
+            "version": "v1",
+        }
+
+    warnings = result.quality.get("parse_warnings") or []
+    final_status = STATUS_SUCCESS_WITH_WARNINGS if warnings else STATUS_SUCCESS
+
     latency_ms = int((time.monotonic() - started) * 1000)
     _finalize(
         db,
         ctx,
-        status=STATUS_SUCCESS,
-        output_payload=out,
+        status=final_status,
+        output_payload=output_payload,
         error_message=None,
         latency_ms=latency_ms,
     )
     METRICS.dashboard_runs_total.labels(event="succeeded").inc()
-    log.info("worker_run_succeeded", run_id=run_id, latency_ms=latency_ms)
+    log.info(
+        "worker_run_succeeded",
+        run_id=run_id,
+        latency_ms=latency_ms,
+        site_model_id=site_model_id,
+        matched=len(matched),
+        quarantine=quarantine_inserted,
+        warnings=len(warnings),
+    )
     return run_id
 
 

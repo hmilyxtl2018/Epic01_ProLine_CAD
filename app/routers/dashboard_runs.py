@@ -89,8 +89,24 @@ def list_runs(
 ) -> RunListResponse:
     rows, total = runs_service.list_runs(db, page=page, page_size=page_size)
     METRICS.dashboard_runs_total.labels(event="listed").inc()
+    items: list[RunSummary] = []
+    for r in rows:
+        payload = r.input_payload or {}
+        items.append(
+            RunSummary(
+                mcp_context_id=r.mcp_context_id,
+                agent=r.agent,
+                agent_version=r.agent_version,
+                status=r.status,
+                timestamp=r.timestamp,
+                latency_ms=r.latency_ms or 0,
+                filename=payload.get("filename"),
+                size_bytes=payload.get("size_bytes"),
+                detected_format=payload.get("detected_format"),
+            )
+        )
     return RunListResponse(
-        items=[RunSummary.model_validate(r) for r in rows],
+        items=items,
         total=total,
         page=page,
         page_size=page_size,
@@ -180,6 +196,42 @@ def get_run_cad(
         media_type="application/dxf",
         filename=f"{mcp_context_id}.dxf",
     )
+
+
+# ── DELETE /dashboard/runs/{id} ────────────────────────────────────────
+@router.delete(
+    "/runs/{mcp_context_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Hard-delete a run + all related rows + on-disk artefacts",
+)
+def delete_run(
+    mcp_context_id: str,
+    db: Session = Depends(_db_operator),
+    user: CurrentUser = Depends(_operator_or_admin),
+):
+    deleted = runs_service.delete_run(db, mcp_context_id)
+    if not deleted:
+        raise AppError(
+            error_code="NOT_FOUND",
+            message=f"Run '{mcp_context_id}' not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            mcp_context_id=mcp_context_id,
+        )
+    db.add(
+        AuditLogAction(
+            actor=user.actor,
+            actor_role=user.role,
+            action="run.delete",
+            target_type="mcp_context",
+            target_id=mcp_context_id,
+            payload={},
+            mcp_context_id=None,  # FK target is gone; null is allowed.
+            ts=datetime.now(tz=timezone.utc),
+        )
+    )
+    METRICS.dashboard_runs_total.labels(event="deleted").inc()
+    log.info("run_deleted", run_id=mcp_context_id, actor=user.actor)
+    return None
 
 
 # ── POST /dashboard/runs ───────────────────────────────────────────────
