@@ -12,13 +12,19 @@
  */
 
 import { useMemo, useState } from "react";
-import { ConstraintForm } from "./ConstraintForm";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { ConstraintItem, ConstraintKind, ValidationIssue } from "@/lib/types";
+import type {
+  ConstraintItem,
+  ConstraintKind,
+  ConstraintCreateRequest,
+  ConstraintPayload,
+  ConstraintUpdateRequest,
+  ValidationIssue,
+} from "@/lib/types";
 import { Icon } from "@/components/icons";
 import { ConstraintGraph } from "./ConstraintGraph";
+import { ConstraintForm, type ConstraintFormData } from "./ConstraintForm";
 
 // Static class mapping — Tailwind JIT cannot detect dynamically built
 // `bg-${color}-50` strings, so we keep both color classes precomputed.
@@ -28,7 +34,7 @@ const KIND_META: Record<
 > = {
   predecessor: { label: "先后", icon: "→", chipClass: "bg-violet-50 text-violet-700" },
   resource:    { label: "资源", icon: "◆", chipClass: "bg-amber-50 text-amber-700" },
-  takt:        { label: "节拍", icon: "⌛", chipClass: "bg-sky-50 text-sky-700" },
+  takt:        { label: "节拍", icon: "⏱", chipClass: "bg-sky-50 text-sky-700" },
   exclusion:   { label: "互斥", icon: "✕", chipClass: "bg-rose-50 text-rose-700" },
 };
 
@@ -36,7 +42,7 @@ interface Props {
   siteModelId: string;
 }
 
-
+export function ConstraintsPanel({ siteModelId }: Props) {
   const [kindFilter, setKindFilter] = useState<ConstraintKind | "all">("all");
   const [activeOnly, setActiveOnly] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -56,25 +62,31 @@ interface Props {
 
   const items = listQ.data?.items ?? [];
   // 自动聚合所有资产名
+  //
+  // Note: narrow via `payload.kind` (discriminated union tag) rather than
+  // `i.kind` — on `ConstraintItem` the two are typed independently, so the
+  // latter cannot narrow `payload`.
   const allAssets = useMemo(() => {
     const s = new Set<string>();
     for (const i of items) {
-      if (i.kind === "predecessor") {
-        s.add(i.payload.from); s.add(i.payload.to);
-      } else if (i.kind === "resource") {
-        for (const a of i.payload.asset_ids) s.add(a);
-      } else if (i.kind === "takt") {
-        s.add(i.payload.asset_id);
-      } else if (i.kind === "exclusion") {
-        for (const a of i.payload.asset_ids) s.add(a);
+      const p = i.payload;
+      switch (p.kind) {
+        case "predecessor":
+          s.add(p.from); s.add(p.to);
+          break;
+        case "resource":
+          for (const a of p.asset_ids) s.add(a);
+          break;
+        case "takt":
+          s.add(p.asset_id);
+          break;
+        case "exclusion":
+          for (const a of p.asset_ids) s.add(a);
+          break;
       }
     }
     return Array.from(s).sort();
   }, [items]);
-  const filtered = useMemo(
-    () => (kindFilter === "all" ? items : items.filter((i) => i.kind === kindFilter)),
-    [items, kindFilter],
-  );
 
   const counts = useMemo(() => {
     const out: Record<ConstraintKind | "all", number> = {
@@ -83,6 +95,11 @@ interface Props {
     for (const i of items) out[i.kind]++;
     return out;
   }, [items]);
+
+  const filtered = useMemo(
+    () => (kindFilter === "all" ? items : items.filter((i) => i.kind === kindFilter)),
+    [items, kindFilter],
+  );
 
   const selected = filtered.find((i) => i.constraint_id === selectedId) ?? null;
 
@@ -109,13 +126,55 @@ interface Props {
   // 新建约束 mutation
   const qc = useQueryClient();
   const createMut = useMutation({
-    mutationFn: (data: any) => api.createConstraint(siteModelId, data),
+    mutationFn: (data: ConstraintCreateRequest) => api.createConstraint(siteModelId, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["constraints", siteModelId] });
       qc.invalidateQueries({ queryKey: ["constraints-validate", siteModelId] });
       setShowCreate(null);
     },
   });
+
+  // `ConstraintForm` hands us a flat object of
+  //   `{ ...payloadFields, kind, priority, is_active }`
+  // We have to strip `priority` / `is_active` back to the request's top level,
+  // otherwise they leak into `payload` and the backend rejects the request
+  // because `ConstraintPayload` variants have no such fields.
+  const submitCreate = (data: ConstraintFormData) => {
+    const { priority, is_active, ...payloadFields } = data;
+    createMut.mutate({
+      constraint_id: `cst_${Date.now()}`,
+      payload: payloadFields as ConstraintPayload,
+      priority: priority ?? 1,
+      is_active: is_active ?? true,
+    });
+  };
+
+  // A-2: soft-delete + activate/deactivate, reusing existing api.* endpoints.
+  // Both invalidate the same two queries so the DAG + validator re-run.
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: ["constraints", siteModelId] });
+    qc.invalidateQueries({ queryKey: ["constraints-validate", siteModelId] });
+  };
+  const deleteMut = useMutation({
+    mutationFn: (cid: string) => api.deleteConstraint(siteModelId, cid),
+    onSuccess: () => {
+      invalidateAll();
+      setSelectedId(null);
+    },
+  });
+  const updateMut = useMutation({
+    mutationFn: (args: { cid: string; body: ConstraintUpdateRequest }) =>
+      api.updateConstraint(siteModelId, args.cid, args.body),
+    onSuccess: () => invalidateAll(),
+  });
+
+  const handleDelete = (cid: string) => {
+    if (!window.confirm(`确认删除约束 ${cid}？（软删除，可恢复）`)) return;
+    deleteMut.mutate(cid);
+  };
+  const handleToggleActive = (item: ConstraintItem) => {
+    updateMut.mutate({ cid: item.constraint_id, body: { is_active: !item.is_active } });
+  };
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr_360px] gap-3 overflow-hidden p-3">
@@ -139,7 +198,12 @@ interface Props {
         selectedAsset={selectedAsset}
         onSelectAsset={handleSelectAsset}
       />
-      <RightDetail item={selected} />
+      <RightDetail
+        item={selected}
+        onDelete={handleDelete}
+        onToggleActive={handleToggleActive}
+        busy={deleteMut.isPending || updateMut.isPending}
+      />
 
       {/* 新建约束弹窗 */}
       {showCreate && (
@@ -149,12 +213,7 @@ interface Props {
             <ConstraintForm
               kind={showCreate}
               assets={allAssets}
-              onSubmit={(data) => createMut.mutate({
-                constraint_id: `cst_${Date.now()}`,
-                payload: { ...data, kind: showCreate },
-                priority: data.priority ?? 1,
-                is_active: data.is_active ?? true,
-              })}
+              onSubmit={submitCreate}
               onCancel={() => setShowCreate(null)}
             />
             {createMut.isPending && <div className="text-xs text-zinc-400 mt-2">提交中…</div>}
@@ -406,7 +465,14 @@ function ValidationBanner({
 
 // ── Right detail (read-only JSON) ─────────────────────────────────────
 
-function RightDetail({ item }: { item: ConstraintItem | null }) {
+function RightDetail({
+  item, onDelete, onToggleActive, busy,
+}: {
+  item: ConstraintItem | null;
+  onDelete: (cid: string) => void;
+  onToggleActive: (item: ConstraintItem) => void;
+  busy: boolean;
+}) {
   if (!item) {
     return (
       <aside className="flex items-center justify-center rounded-md border border-zinc-200 bg-white p-4 text-[12px] text-zinc-400">
@@ -440,8 +506,33 @@ function RightDetail({ item }: { item: ConstraintItem | null }) {
         创建者：<span className="font-mono">{item.created_by ?? "—"}</span>
       </div>
 
-      <div className="rounded border border-dashed border-zinc-200 px-2 py-1.5 text-center text-[11px] text-zinc-400">
-        编辑 / 删除 即将上线
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onToggleActive(item)}
+          className={[
+            "flex-1 rounded px-2 py-1.5 text-[11px] font-medium border transition",
+            item.is_active
+              ? "bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100"
+              : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100",
+            busy ? "opacity-50 cursor-not-allowed" : "",
+          ].join(" ")}
+        >
+          {item.is_active ? "停用" : "启用"}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onDelete(item.constraint_id)}
+          className={[
+            "flex-1 rounded px-2 py-1.5 text-[11px] font-medium border transition",
+            "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100",
+            busy ? "opacity-50 cursor-not-allowed" : "",
+          ].join(" ")}
+        >
+          删除
+        </button>
       </div>
     </aside>
   );
