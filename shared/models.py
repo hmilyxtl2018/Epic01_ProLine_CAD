@@ -129,6 +129,12 @@ class Asset(BaseModel):
     """本体资产 — CAD 实体映射后的参数化设备对象。"""
     asset_guid: str = Field(default_factory=lambda: f"MDI-{uuid.uuid4().hex[:8].upper()}")
     type: AssetType = AssetType.OTHER
+    # GA-必含占位 (Phase 5 才做业务推理): Equipment 内部细分 ——
+    # e.g. "HoningMachine" / "WashingMachine" / "LeakTester" / "DeepRolling"。
+    # ConstraintAgent 的工艺约束推理需要这一层粒度;先留 schema 位,
+    # ParseAgent v1.0 GA 期默认 None,以保持向前兼容旧 SiteModel 数据。
+    # 详见 ExcPlan/parse_agent_evaluation_dimensions.md §5.1。
+    sub_type: str | None = None
     coords: Coords = Field(default_factory=Coords)
     footprint: Footprint | None = None
     ports: list[Port] = Field(default_factory=list)
@@ -137,6 +143,40 @@ class Asset(BaseModel):
     label: str = ""
     block_name: str = ""
     coord_source: str = ""  # "insert" | "start" | "centroid" | "" (=default origin)
+
+    # ── D5 可追溯 (provenance) — see ExcPlan/parse_agent_evaluation_dimensions.md §1, §2 ──
+    # The next three fields are the in-memory mirror of the columns added by
+    # `db/alembic/versions/0017_asset_provenance_extension.py`. They are the
+    # ParseAgent's audit trail that lets ConstraintAgent / R5 Domain Expert
+    # answer the "where did this asset come from?" question without
+    # re-parsing the DXF.
+    #
+    # All three are Optional / default to None / [] so the model stays
+    # backwards compatible with SiteModels persisted before §S1-T2 (GA
+    # plan) wires up the finalize hook. A None here surfaces in the UI
+    # as a yellow "未知 provenance" tag — the correct signal until the
+    # ParseAgent finalize() backfills it.
+
+    # H 阶映射 — drives `run_evaluations.h{1..4}_count`. Allowed values:
+    #   "rule_block"   (H2 字面量, default 0.95 confidence)
+    #   "rule_layer"   (H3 消歧 via layer)
+    #   "rule_geom"    (H3 消歧 via geometry features)
+    #   "heuristic"    (H3 / H4 boundary, e.g. heuristic.frequency)
+    #   "llm_fallback" (H4 LLM 兜底, ≤ 0.8 × LLM self-reported confidence)
+    classifier_kind: str | None = None
+
+    # DXF entity handle / cluster_id. Lets R5 Domain Expert click
+    # "selected object" → "open in DXF" to inspect the original geometry.
+    source_entity_id: str | None = None
+
+    # H5 anti-hallucination evidence words. For LLM-fallback rows this
+    # MUST be a subset of the input tokens fed to the LLM, otherwise
+    # `agents/parse_agent/hooks.py::H5_response_validator` rejects the
+    # classification (post-hoc check; rejected rows fall back to "Other").
+    # Empty list `[]` means "no LLM evidence required" (rule-based row).
+    evidence_keywords: list[str] = Field(default_factory=list)
+
+
 
 
 class OntologyLink(BaseModel):

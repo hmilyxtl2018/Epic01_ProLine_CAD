@@ -27,6 +27,90 @@ try {
   }, 0);
 } catch {}
 
+// Suppress a known class of MLightCAD `console.warn` noise that triggers on
+// almost every DWG-converted DXF in our corpus. The library logs (via
+// loglevel → console.warn) when an individual hatch's boundaries can't be
+// triangulated — typically because the source DWG had self-intersecting or
+// degenerate hatch loops. The drawing itself still renders fine; only the
+// fill of that one hatch is dropped, which we accept for a preview.
+//
+// Without this, every preview prints dozens of:
+//   "Failed to convert hatch boundaries!"
+//   "Polybool error: ..., epsilon is 1e-6"
+//   "Triangulate shape error: ..."
+//   "mergedHoles.regions is empty!"
+// to the host page's console, which makes the dashboard look broken to
+// reviewers. We keep all *other* warns (font issues, render errors, etc.)
+// flowing through untouched.
+//
+// ⚠️  TIMING CAVEAT ⚠️ — When this entry runs, the `loglevel` library has
+// ALREADY been imported at the top of this file (via @mlightcad/*), and
+// loglevel's `methodFactory` cached `console.warn.bind(console)` on every
+// logger instance at that import time. So patching `console.warn` here is
+// TOO LATE for any logger that was created during module init — those
+// loggers hold the original reference and skip our wrapper. That bug
+// produced thousands of `Failed to convert hatch boundaries!` lines
+// streaming into the dashboard console.
+//
+// The REAL fix — and the one that actually silences the noise — lives in
+// `public/mlight-viewer.html`, where the same patch runs in a synchronous
+// IIFE BEFORE `await import("/mlight/bundle.js")`. That guarantees every
+// loglevel logger created during bundle init sees our wrapper.
+//
+// We keep this block as defense-in-depth for two scenarios:
+//   1. Loggers created LAZILY at first warn-time (post-init) — those will
+//      pick up our wrapper here.
+//   2. Embedders that load `bundle.js` from a host page that DOESN'T do
+//      the early patch (e.g. ad-hoc devtools experiments, tests).
+try {
+  const NOISE = [
+    "Failed to convert hatch boundaries",
+    "Polybool error",
+    "Triangulate shape error",
+    "mergedHoles.regions is empty",
+  ];
+  const isNoise = (args) => {
+    for (const a of args) {
+      if (typeof a === "string") {
+        for (const n of NOISE) if (a.includes(n)) return true;
+      }
+    }
+    return false;
+  };
+  const origWarn = console.warn.bind(console);
+  const origError = console.error.bind(console);
+  // Counter exposed for debugging — `window.__mlight.suppressedHatchWarns`.
+  // The early patch in mlight-viewer.html seeds this with {warn, error}; we
+  // merge so neither side clobbers the other.
+  const existing =
+    (typeof window !== "undefined" && window.__mlight?.suppressedHatchWarns) ||
+    null;
+  const counter = existing && typeof existing === "object"
+    ? existing
+    : { count: 0, warn: 0, error: 0 };
+  console.warn = (...args) => {
+    if (isNoise(args)) {
+      counter.count = (counter.count || 0) + 1;
+      counter.warn = (counter.warn || 0) + 1;
+      return;
+    }
+    origWarn(...args);
+  };
+  console.error = (...args) => {
+    if (isNoise(args)) {
+      counter.count = (counter.count || 0) + 1;
+      counter.error = (counter.error || 0) + 1;
+      return;
+    }
+    origError(...args);
+  };
+  if (typeof window !== "undefined") {
+    window.__mlight = window.__mlight || {};
+    window.__mlight.suppressedHatchWarns = counter;
+  }
+} catch {}
+
+
 // MLightCAD spawns three Web Workers (DXF parser, DWG parser via libredwg,
 // MText renderer). Defaults look like "./assets/<name>.js" relative to the
 // host page (/mlight-viewer.html → /assets/<name>.js → 404). We bundle the
@@ -95,9 +179,12 @@ function mount(host, file, opts = {}) {
   };
 }
 
-// Expose on window for the iframe HTML to call.
+// Expose on window for the iframe HTML to call. Merge into any existing
+// __mlight (the noise-filter block above seeds suppressedHatchWarns there
+// before the module finishes evaluating, and we don't want to clobber it).
 if (typeof window !== "undefined") {
-  window.__mlight = { mount };
+  window.__mlight = Object.assign(window.__mlight || {}, { mount });
 }
+
 
 export { mount };

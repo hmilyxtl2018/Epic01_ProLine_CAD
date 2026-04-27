@@ -8,6 +8,7 @@ import { ApiError, api } from "@/lib/api";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useRunStream } from "@/lib/useRunStream";
 import { useQueryClient } from "@tanstack/react-query";
+import { RiskPanel } from "@/components/runs/RiskPanel";
 
 const TERMINAL = new Set(["SUCCESS", "SUCCESS_WITH_WARNINGS", "ERROR"]);
 
@@ -78,6 +79,10 @@ export default function RunDetailPage() {
         </p>
       </header>
 
+      {/* 顶端风险雷达：5 维 D-Score + 4 闸门 G-Gate + Top-3 风险摘要。
+          点击任一进度条会锚跳到下方对应 D 卡（card-d1-* / card-d2-* / ...）。 */}
+      <RiskPanel detail={r} />
+
       <section className="grid gap-4 md:grid-cols-2">
         <Card title="Input payload">
           <Json value={r.input_payload} maxHeight={320} />
@@ -103,7 +108,7 @@ export default function RunDetailPage() {
 
       <LLMEnrichmentSections detail={r} />
 
-      <Card title="Linked SiteModel">
+      <Card title="Linked SiteModel" dTag="D4" anchorId="card-d4-sitemodel">
         {r.site_model_id ? (
           <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
             <dt className="text-zinc-500">site_model_id</dt>
@@ -118,11 +123,22 @@ export default function RunDetailPage() {
         )}
       </Card>
 
-      <Card title="Run metadata">
+      <Card title="Run metadata" dTag="D5" anchorId="card-d5-runmeta">
         <dl className="grid grid-cols-2 gap-2 text-sm">
           <dt className="text-zinc-500">latency_ms</dt>
           <dd>{r.latency_ms ?? "—"}</dd>
         </dl>
+      </Card>
+
+      {/* D3 关系本体 占位卡 ——
+          目前 ParseAgent 尚未独立输出 link_symmetry / link_precision；
+          Phase 5 落地后此卡会显示 LOCATED_IN / FEEDS / LABELED_BY 三类边的对称性与精确率。 */}
+      <Card title="⑥ 关系本体（占位）" dTag="D3" anchorId="card-d3-links">
+        <p className="text-sm text-zinc-500">
+          Phase 5 启用 <code className="font-mono">link_symmetry / link_precision</code>{" "}
+          指标后，此卡将显示 SiteModel 的关系图统计（LOCATED_IN / FEEDS / LABELED_BY）。
+          当前 agent 默认不输出关系，Risk Panel 中显示 <span className="font-mono">N/A</span>。
+        </p>
       </Card>
     </div>
   );
@@ -147,8 +163,8 @@ function ParseResultSections({ detail }: { detail: import("@/lib/types").RunDeta
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      {/* 1. Fingerprint */}
-      <Card title="① 文件指纹与格式确认">
+      {/* 1. Fingerprint  → D1 几何本体（输入侧） */}
+      <Card title="① 文件指纹与格式确认" dTag="D1" anchorId="card-d1-fingerprint">
         <KV
           rows={[
             ["filename", fp.filename],
@@ -162,8 +178,8 @@ function ParseResultSections({ detail }: { detail: import("@/lib/types").RunDeta
         />
       </Card>
 
-      {/* 2. Summary */}
-      <Card title="② 解析摘要 (counts / bbox)">
+      {/* 2. Summary  → D1 几何本体（实体清点） */}
+      <Card title="② 解析摘要 (counts / bbox)" dTag="D1" anchorId="card-d1-summary">
         <KV
           rows={[
             ["entity_total", summary.entity_total ?? 0],
@@ -199,8 +215,8 @@ function ParseResultSections({ detail }: { detail: import("@/lib/types").RunDeta
         )}
       </Card>
 
-      {/* 3. Semantics */}
-      <Card title="③ 语义抽取结果 (taxonomy + quarantine)">
+      {/* 3. Semantics  → D2 语义本体 */}
+      <Card title="③ 语义抽取结果 (taxonomy + quarantine)" dTag="D2" anchorId="card-d2-semantics">
         <KV
           rows={[
             ["matched_terms_count", semantics.matched_terms_count ?? 0],
@@ -236,8 +252,8 @@ function ParseResultSections({ detail }: { detail: import("@/lib/types").RunDeta
         )}
       </Card>
 
-      {/* 4. Quality */}
-      <Card title="④ 质量与可追溯性">
+      {/* 4. Quality  → D5 可追溯（artifacts / warnings） */}
+      <Card title="④ 质量与可追溯性" dTag="D5" anchorId="card-d5-quality">
         <KV
           rows={[
             ["confidence_score", quality.confidence_score ?? "—"],
@@ -299,11 +315,43 @@ function short(s: unknown, n: number): string {
   return s.length <= n ? s : `${s.slice(0, n)}…`;
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+const D_TAG_STYLE: Record<string, string> = {
+  D1: "bg-sky-100 text-sky-800 ring-sky-200",
+  D2: "bg-indigo-100 text-indigo-800 ring-indigo-200",
+  D3: "bg-violet-100 text-violet-800 ring-violet-200",
+  D4: "bg-emerald-100 text-emerald-800 ring-emerald-200",
+  D5: "bg-amber-100 text-amber-800 ring-amber-200",
+};
+
+function Card({
+  title,
+  children,
+  dTag,
+  anchorId,
+}: {
+  title: string;
+  children: React.ReactNode;
+  dTag?: string;
+  anchorId?: string;
+}) {
   return (
-    <section className="rounded border bg-white p-4">
-      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-        {title}
+    <section
+      id={anchorId}
+      className="scroll-mt-20 rounded border bg-white p-4"
+    >
+      <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+        {dTag && (
+          <span
+            title={`评估维度 ${dTag} — 详见 ExcPlan/parse_agent_evaluation_dimensions.md`}
+            className={
+              "rounded px-1.5 py-0.5 text-[10px] font-bold ring-1 " +
+              (D_TAG_STYLE[dTag] || "bg-zinc-100 text-zinc-700 ring-zinc-200")
+            }
+          >
+            {dTag}
+          </span>
+        )}
+        <span>{title}</span>
       </h2>
       {children}
     </section>

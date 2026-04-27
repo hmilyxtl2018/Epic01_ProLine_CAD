@@ -45,20 +45,136 @@
       so this page works fully offline (no esm.sh / esm.run round-trips).
     -->
     <script type="module">
+      // ── MLightCAD console-noise filter ───────────────────────────────
+      // MLightCAD's hatch / DXF pipeline logs dozens of console warnings
+      // per drawing on DWG-converted DXFs with self-intersecting hatch
+      // boundaries — the geometry still renders fine, only that one fill
+      // is dropped. We swallow them here so the dev console stays
+      // readable.
+      //
+      // IMPORTANT — this MUST run BEFORE `await import("/mlight/bundle.js")`.
+      //
+      // The bundle pulls in `loglevel`, whose `methodFactory` caches
+      // `console.warn.bind(console)` on every logger instance at module
+      // init time. If we patch console.warn AFTER the bundle finishes
+      // importing (e.g. from inside mlight-entry.mjs's top level), the
+      // loggers already hold the original reference and our wrapper is
+      // bypassed — exactly the bug that produced
+      //   "VM####:4963 Failed to convert hatch boundaries!"
+      // streaming into the console for every preview.
+      //
+      // We also patch console.error as defense-in-depth: a minor MLight
+      // version bump could move the same message to logger.error.
+      (() => {
+        const NOISE = [
+          "Failed to convert hatch boundaries",
+          "Polybool error",
+          "epsilon is 1e-",
+        ];
+        const counter = { warn: 0, error: 0 };
+        window.__mlight = window.__mlight || {};
+        window.__mlight.suppressedHatchWarns = counter;
+
+        const wrap = (origMethod, key) => {
+          const orig = origMethod.bind(console);
+          return function (...args) {
+            const msg = args[0];
+            if (typeof msg === "string" && NOISE.some((n) => msg.includes(n))) {
+              counter[key]++;
+              return; // swallow
+            }
+            return orig.apply(this, args);
+          };
+        };
+        console.warn = wrap(console.warn, "warn");
+        console.error = wrap(console.error, "error");
+      })();
+
       const params = new URLSearchParams(location.search);
       const url = params.get("url");
       const phase = document.getElementById("phase");
       const boot = document.getElementById("boot");
 
+      // Size thresholds — purely UX guards for 大文件 (no hard limit).
+      // Picked from observed corpus: most production DXFs are <30 MB; once
+      // the in-memory text + parsed entity tree crosses ~80 MB we routinely
+      // see Chrome tabs that *look* hung (no log, no error, blank canvas)
+      // because the renderer worker is spending 30–90s in single-thread
+      // triangulation. >200 MB is essentially "your browser will OOM,
+      // download and open in a desktop CAD tool".
+      const SOFT_LIMIT = 80 * 1024 * 1024;
+      const HARD_WARN = 200 * 1024 * 1024;
+
+      const humanBytes = (n) =>
+        n < 1024 ? `${n} B`
+        : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB`
+        : n < 1024 * 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB`
+        : `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+
+      const escapeHtml = (s) =>
+        String(s).replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
+
       const fail = (msg) => {
         boot.innerHTML = `<div class="err"><b>MLightCAD 加载失败</b><br/>${
-          String(msg).replace(/[<>]/g, (c) => ({ "<": "&lt;", ">": "&gt;" }[c]))
+          escapeHtml(msg)
         }<br/><br/><span style="color:#71717a;font-size:11px">请检查浏览器控制台，或切换回 dxf-viewer。</span></div>`;
       };
+
+      // Render a confirmation panel for very large drawings.  Returns a
+      // Promise<boolean>: true = user clicked "继续渲染", false = aborted.
+      const confirmLarge = (sizeBytes, downloadHref) =>
+        new Promise((resolve) => {
+          const big = sizeBytes >= HARD_WARN;
+          boot.style.pointerEvents = "auto";
+          boot.innerHTML = `
+            <div style="max-width: 560px; padding: 20px; background:#fff;
+                        border:1px solid #e4e4e7; border-radius:8px;
+                        box-shadow:0 8px 24px rgba(0,0,0,0.06);
+                        font-size:13px; color:#27272a; line-height:1.6;">
+              <div style="font-weight:600; font-size:15px; margin-bottom:8px;
+                          color:${big ? "#b91c1c" : "#a16207"};">
+                ${big ? "⚠️ 文件过大，预览可能崩溃" : "ℹ️ 文件较大，预览会比较慢"}
+              </div>
+              <div>这张图 <b>${humanBytes(sizeBytes)}</b>${
+                big
+                  ? "，多数浏览器会在解析阶段因内存不足而静默失败（标签页空白）。建议下载到本地，用桌面 CAD 工具（AutoCAD / BricsCAD / DraftSight）打开。"
+                  : "，浏览器解析 + 三角化预计需要 30 ~ 90 秒，期间页面会卡顿。继续？"
+              }</div>
+              <ul style="margin:8px 0 12px 18px; color:#52525b; font-size:12px;">
+                <li>首次解析时主线程几乎不响应（包括关闭标签页）</li>
+                <li>若控制台出现 "Out of memory" 或标签页崩溃图标，请改走桌面 CAD</li>
+                <li>命令行预览能力的优化已列入 backlog（streaming + LOD）</li>
+              </ul>
+              <div style="display:flex; gap:8px; justify-content:flex-end;">
+                <a href="${escapeHtml(downloadHref)}" download
+                   style="padding:6px 14px; border:1px solid #d4d4d8;
+                          border-radius:6px; color:#27272a; text-decoration:none;
+                          font-size:12px;">下载 DXF</a>
+                <button id="abort"
+                   style="padding:6px 14px; border:1px solid #d4d4d8;
+                          border-radius:6px; background:#fff; color:#27272a;
+                          font-size:12px; cursor:pointer;">取消</button>
+                <button id="proceed"
+                   style="padding:6px 14px; border:0; border-radius:6px;
+                          background:${big ? "#b91c1c" : "#6366f1"}; color:#fff;
+                          font-size:12px; cursor:pointer;">${
+                            big ? "我知道风险，仍然继续" : "继续渲染"
+                          }</button>
+              </div>
+            </div>`;
+          boot.querySelector("#proceed").addEventListener("click", () => resolve(true));
+          boot.querySelector("#abort").addEventListener("click", () => resolve(false));
+        });
 
       if (!url) {
         fail("缺少 ?url=<dxf-url> 参数");
       } else {
+        // Wrapped in an async IIFE so we can use early-`return` to abort
+        // the pipeline (e.g. when the user clicks "取消" on the large-file
+        // confirmation panel). Top-level `<script type="module">` allows
+        // `await` but NOT `return`, so without this wrapper Chrome throws
+        // "Illegal return statement" before any of our code runs.
+        await (async () => {
         try {
           phase.textContent = "下载本地 bundle";
           // window.__mlight is exposed by /mlight/bundle.js after import.
@@ -86,7 +202,55 @@
             headers: { "X-Role": role, "X-Actor": actor },
           });
           if (!r.ok) throw new Error(`下载 DXF 失败 HTTP ${r.status}`);
-          const blob = await r.blob();
+
+          // Stream the body so we can show a download-progress UI.  Total
+          // size comes from Content-Length (FileResponse always sets it for
+          // files on disk).  If header missing, we fall back to indeterminate.
+          const total = Number(r.headers.get("Content-Length") || 0);
+          const reader = r.body && r.body.getReader ? r.body.getReader() : null;
+          let chunks = [];
+          let received = 0;
+          if (reader) {
+            // eslint-disable-next-line no-constant-condition
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              chunks.push(value);
+              received += value.byteLength;
+              if (total > 0) {
+                phase.textContent = `下载 DXF · ${humanBytes(received)} / ${humanBytes(total)} (${Math.round(received / total * 100)}%)`;
+              } else {
+                phase.textContent = `下载 DXF · ${humanBytes(received)}`;
+              }
+            }
+          } else {
+            // Older browsers without ReadableStream — single-shot.
+            chunks = [await r.arrayBuffer()];
+            received = chunks[0].byteLength;
+          }
+          const blob = new Blob(chunks, { type: "application/dxf" });
+          const sizeBytes = blob.size;
+
+          // Soft / hard size guard. The user explicitly opted in to this
+          // preview by clicking, so we still let them through, but make
+          // sure they're aware before the browser appears to hang.
+          if (sizeBytes >= SOFT_LIMIT) {
+            const ok = await confirmLarge(sizeBytes, url);
+            if (!ok) {
+              fail(`已取消（文件 ${humanBytes(sizeBytes)} 过大）`);
+              return;
+            }
+            // Re-show the spinner overlay for the render phase.
+            boot.style.pointerEvents = "none";
+            boot.innerHTML = `
+              <div class="spinner"></div>
+              <div>正在解析 ${humanBytes(sizeBytes)} 的 DXF…
+                <span id="phase">提交给解析 worker</span></div>
+              <div style="font-size:11px;color:#a1a1aa">大文件首次渲染可能要 30~90 秒，期间标签页可能无响应</div>`;
+            // Re-grab the new phase span (the old one was wiped).
+            window.__mlightPhase = boot.querySelector("#phase");
+          }
+
           const name = (() => {
             try {
               const u = new URL(url, location.origin);
@@ -97,20 +261,67 @@
           })();
           const file = new File([blob], name, { type: "application/dxf" });
 
-          phase.textContent = "解析 + 渲染";
+          // Update phase counter (either the original #phase or the rebuilt one).
+          const setPhase = (txt) => {
+            try {
+              (window.__mlightPhase || phase).textContent = txt;
+            } catch {}
+          };
+          setPhase("解析 + 渲染");
+
+          // Render-phase watchdog. MlCadViewer doesn't expose a
+          // "documentLoaded" promise we can await on, so we just set a
+          // stale-output timer: if `boot` is still on screen 90s from now,
+          // surface a hint instead of leaving the user staring at a spinner.
+          const watchdog = setTimeout(() => {
+            if (document.body.contains(boot)) {
+              setPhase("仍在解析中… (主线程繁忙)");
+              const note = document.createElement("div");
+              note.style.cssText = "font-size:11px; color:#a16207; max-width:420px; text-align:center; padding:0 16px;";
+              note.textContent =
+                "如果超过 3 分钟仍是空白，说明浏览器可能已 OOM——请在 DevTools 控制台查找 'Out of memory'，并改用桌面 CAD 打开。";
+              boot.appendChild(note);
+            }
+          }, 90_000);
+
+          // Window-level error trap during render. Most parser-worker
+          // errors propagate as `unhandledrejection`; we bubble those into
+          // the same fail() panel so the iframe doesn't sit blank.
+          const onUnhandled = (ev) => {
+            const reason = ev.reason || ev.error || ev.message || "unknown";
+            // Ignore the hatch-noise we already filter — those don't
+            // affect the document load.
+            const txt = typeof reason === "string" ? reason : (reason?.message || String(reason));
+            if (txt.includes("Failed to convert hatch boundaries")) return;
+            console.error("[mlight-viewer] render error:", reason);
+            if (document.body.contains(boot)) {
+              fail(`渲染时报错: ${txt.slice(0, 240)}`);
+            }
+          };
+          window.addEventListener("unhandledrejection", onUnhandled);
+          window.addEventListener("error", onUnhandled);
+
           window.__mlight.mount(document.getElementById("app"), file, {
             background: 0xffffff,
             locale: "zh",
           });
 
-          // Hide bootstrap overlay once Vue has mounted.
+          // Hide bootstrap overlay once Vue has mounted.  (Mount returns
+          // synchronously; the DXF parse continues in a worker afterwards
+          // but the canvas is already on screen.)
           requestAnimationFrame(() => {
-            setTimeout(() => boot.remove(), 250);
+            setTimeout(() => {
+              clearTimeout(watchdog);
+              window.removeEventListener("unhandledrejection", onUnhandled);
+              window.removeEventListener("error", onUnhandled);
+              boot.remove();
+            }, 250);
           });
         } catch (e) {
           console.error("[mlight-viewer]", e);
           fail(e?.message || String(e));
         }
+        })();  // end async IIFE
       }
     </script>
   </body>

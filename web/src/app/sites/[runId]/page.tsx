@@ -9,6 +9,8 @@ import type { LLMEnrichment, RunDetail } from "@/lib/types";
 import { Icon, type IconName } from "@/components/icons";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ConstraintsPanel } from "@/components/constraints/ConstraintsPanel";
+import { TopologyGraphCard } from "@/components/sites/TopologyGraphCard";
+import { DraggableCardGrid, type DraggableItem } from "@/components/sites/DraggableCardGrid";
 
 // ── Top workflow tabs ────────────────────────────────────────────────
 const STAGES: { key: string; label: string; icon: IconName; enabled: boolean; desc: string }[] = [
@@ -195,7 +197,11 @@ function LeftSidebar({
               meta={typeof p.best_sim === "number" ? p.best_sim.toFixed(2) : undefined}
             />
           ))}
-          {recognized.length === 0 && <EmptyRow>暂无</EmptyRow>}
+          {recognized.length === 0 && (
+            // 诊断：promotion_candidates 为空时分清是 LLM/仲裁没跑、跑了但
+            // 全部进 review/discard、还是 quarantine 本来就没有候选项。
+            <RecognizedDiag enrich={enrich} runId={run.mcp_context_id} />
+          )}
         </TreeGroup>
         <TreeGroup label="待人工确认" count={unknownClusters.length} tone="warn">
           {unknownClusters.slice(0, 8).map((p: any, i: number) => {
@@ -603,15 +609,14 @@ function RawView({ run }: { run: RunDetail }) {
   const bbox = stats.bounding_box;
   const filename = cad.filename || (run.input_payload as any)?.filename || "未知文件";
 
-  return (
-    <div className="grid flex-1 grid-cols-2 gap-2 overflow-hidden">
-      {/* Left: file metadata + entity histogram */}
-      <div className="flex flex-col gap-2 overflow-y-auto rounded border border-zinc-200 bg-white p-3">
-        <header className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-700">
-          <Icon name="file-text" size={13} className="text-zinc-500" />
-          文件元信息
-        </header>
-        <div className="grid grid-cols-2 gap-1.5 text-[11.5px]">
+  // ── Card 1: 文件元信息 + 实体类型直方图 ──────────────────────────
+  // Rendered as a pure body (no outer chrome / no header) — the
+  // DraggableCardGrid wraps each non-`bare` item in its own
+  // `<DraggableCard>` shell which provides the header (= drag handle),
+  // border, and scroll. Doing the chrome twice would look ridiculous.
+  const renderMetadata = () => (
+    <div className="flex flex-col gap-2 p-3">
+      <div className="grid grid-cols-2 gap-1.5 text-[11.5px]">
           <KV k="文件名" v={<span className="truncate">{filename}</span>} />
           <KV k="DXF 版本" v={cad.dxf_version || cad.schema || "—"} />
           <KV k="单位" v={stats.units || "—"} />
@@ -676,18 +681,16 @@ function RawView({ run }: { run: RunDetail }) {
             </ul>
           </div>
         )}
-      </div>
+    </div>
+  );
 
-      {/* Right: raw vs normalized table */}
-      <div className="flex flex-col overflow-hidden rounded border border-zinc-200 bg-white">
-        <header className="flex items-center gap-1.5 border-b border-zinc-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-700">
-          <Icon name="arrow-right" size={13} className="text-zinc-500" />
-          原始命名 → A_normalize 归一化（前 {Math.min(A.length, 60)} 条）
-        </header>
-        {A.length === 0 && (
-          <div className="p-4 text-[12px] text-zinc-500">无 A_normalize 输出</div>
-        )}
-        <div className="flex-1 overflow-y-auto">
+  // ── Card 2: 原始命名 → A_normalize 归一化 ────────────────────────
+  const renderNormalize = () => (
+    <div className="flex h-full flex-col">
+      {A.length === 0 && (
+        <div className="p-4 text-[12px] text-zinc-500">无 A_normalize 输出</div>
+      )}
+      <div className="flex-1 overflow-y-auto">
           <table className="w-full text-[11px]">
             <thead className="sticky top-0 bg-zinc-50 text-[10px] uppercase tracking-wide text-zinc-500">
               <tr>
@@ -698,7 +701,7 @@ function RawView({ run }: { run: RunDetail }) {
               </tr>
             </thead>
             <tbody>
-              {A.slice(0, 60).map((it: any, i: number) => {
+              {A.slice(0, 40).map((it: any, i: number) => {
                 const changed = it.original !== it.normalized;
                 return (
                   <tr key={i} className="border-t border-zinc-100 hover:bg-zinc-50">
@@ -728,7 +731,51 @@ function RawView({ run }: { run: RunDetail }) {
             </tbody>
           </table>
         </div>
-      </div>
+    </div>
+  );
+
+  // ── Card 3: 拓扑关系图谱 ────────────────────────────────────────
+  // bare=true → DraggableCardGrid does NOT wrap this in extra chrome;
+  // TopologyGraphCard already supplies header (with rgl-drag-handle),
+  // body, footer, legend.
+  const renderTopology = () => (
+    <div className="h-full w-full">
+      <TopologyGraphCard run={run} />
+    </div>
+  );
+
+  // Default 2×2 layout in 12-col grid:
+  //   row 0 (rows 0-7):  metadata (cols 0-5) | normalize (cols 6-11)
+  //   row 1 (rows 8-19): topology spans full width
+  // User edits are persisted to localStorage under the key below.
+  const items: DraggableItem[] = [
+    {
+      id: "metadata",
+      title: "文件元信息",
+      icon: "file-text",
+      defaultLayout: { x: 0, y: 0, w: 6, h: 8, minW: 3, minH: 4 },
+      render: renderMetadata,
+    },
+    {
+      id: "normalize",
+      title: `原始命名 → A_normalize 归一化（前 ${Math.min(A.length, 40)} 条）`,
+      icon: "arrow-right",
+      defaultLayout: { x: 6, y: 0, w: 6, h: 8, minW: 3, minH: 4 },
+      render: renderNormalize,
+    },
+    {
+      id: "topology",
+      title: "拓扑关系图谱",
+      icon: "link",
+      bare: true,
+      defaultLayout: { x: 0, y: 8, w: 12, h: 12, minW: 4, minH: 6 },
+      render: renderTopology,
+    },
+  ];
+
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <DraggableCardGrid storageKey="site.s1.raw.layout.v1" items={items} rowHeight={36} />
     </div>
   );
 }
@@ -1333,6 +1380,111 @@ function KV({ k, v }: { k: string; v: React.ReactNode }) {
 
 function EmptyRow({ children }: { children: React.ReactNode }) {
   return <div className="px-1 py-1 text-[11px] text-zinc-400">{children}</div>;
+}
+
+/**
+ * RecognizedDiag — surfaces *why* the "已识别" tree branch is empty.
+ *
+ * The previous UI just rendered "暂无", which conflates three very
+ * different states and forces the reviewer to open the technical run
+ * page to figure out which one. The Three states:
+ *
+ * 1. **LLM enrichment never ran** — `enrich` is null. Probably an old
+ *    run made before agent_loader added the LLM stack, or a parse-only
+ *    pipeline. → red, "未跑 LLM 富化".
+ *
+ * 2. **C_arbiter step missing from steps_run** — quarantine items got
+ *    proposed by D but were never arbitrated. Could be a regression in
+ *    the agent_loader, a pipeline early-exit, or a step error. → red,
+ *    "C_arbiter 未执行".
+ *
+ * 3. **C_arbiter ran but promoted nothing** — counts.promote == 0 and
+ *    counts.review/discard > 0. This is a *correct* outcome ("the model
+ *    was unsure, sent everything to human review"), but visually
+ *    indistinguishable from cases 1/2. → amber, with the actual counts.
+ *
+ * 4. **C_arbiter ran AND quarantine was empty** — counts all zero. The
+ *    file simply didn't have anything ambiguous. → grey, "无 quarantine".
+ *
+ * In all branches we link to `/runs/{id}` so the reviewer can hop into
+ * the technical view and inspect the raw enrichment payload.
+ */
+function RecognizedDiag({
+  enrich,
+  runId,
+}: {
+  enrich: LLMEnrichment | null;
+  runId: string;
+}) {
+  const cRan = enrich?.steps_run?.includes("C_arbiter") ?? false;
+  const counts = (enrich?.sections.C_arbiter as any)?.counts || {};
+  const promote = Number(counts.promote || 0);
+  const review = Number(counts.review || 0);
+  const discard = Number(counts.discard || 0);
+
+  let tone: "red" | "amber" | "grey" = "grey";
+  let title = "暂无";
+  let detail: React.ReactNode = null;
+
+  if (!enrich) {
+    tone = "red";
+    title = "未跑 LLM 富化";
+    detail = (
+      <span>
+        该 Run 缺失 <span className="font-mono">llm_enrichment</span> — 不是识别为 0，而是
+        ParseAgent 完全没跑过 A→K 任一步。
+      </span>
+    );
+  } else if (!cRan) {
+    tone = "red";
+    title = "C_arbiter 未执行";
+    detail = (
+      <span>
+        steps_run = [{(enrich.steps_run || []).join(", ") || "—"}] · 仲裁步骤缺失。
+      </span>
+    );
+  } else if (promote === 0 && (review > 0 || discard > 0)) {
+    tone = "amber";
+    title = "仲裁已执行 · 0 项 promote";
+    detail = (
+      <span>
+        review={review} · discard={discard} · 候选均未达阈值 →{" "}
+        <span className="text-zinc-600">这是合法结果（应交人工）</span>，非 UI bug。
+      </span>
+    );
+  } else if (promote === 0 && review === 0 && discard === 0) {
+    tone = "grey";
+    title = "无 quarantine 项";
+    detail = (
+      <span>该文件解析后没有歧义图层 — D 未生成 cluster proposal，C 自然不会有 promote。</span>
+    );
+  }
+
+  const toneCls =
+    tone === "red"
+      ? "border-red-200 bg-red-50 text-red-800"
+      : tone === "amber"
+        ? "border-amber-200 bg-amber-50 text-amber-800"
+        : "border-zinc-200 bg-zinc-50 text-zinc-600";
+
+  return (
+    <div className={`mt-1 rounded border px-2 py-1.5 text-[10.5px] leading-snug ${toneCls}`}>
+      <div className="flex items-center gap-1 font-semibold">
+        <Icon
+          name={tone === "red" ? "alert-circle" : tone === "amber" ? "alert-triangle" : "info"}
+          size={11}
+        />
+        {title}
+      </div>
+      {detail && <div className="mt-0.5 opacity-90">{detail}</div>}
+      <Link
+        href={`/runs/${runId}`}
+        className="mt-1 inline-flex items-center gap-1 text-[10px] underline opacity-80 hover:opacity-100"
+      >
+        <Icon name="arrow-right" size={10} /> 查看完整 enrichment
+      </Link>
+    </div>
+  );
 }
 
 function StageComingSoon({ stage }: { stage: { label: string; icon: IconName; desc: string } }) {
