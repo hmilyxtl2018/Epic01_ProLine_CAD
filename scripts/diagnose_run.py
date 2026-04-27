@@ -23,13 +23,33 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from typing import Any
+
+# Windows cmd 默认 GBK 输出会被 emoji ✅ ❌ ⚖ 直接打挂 — 强制 UTF-8。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
 from sqlalchemy import text
 
 from app import deps as _deps
 from app.deps import init_engine
+
+
+# 自动落盘 dev 默认 DSN，让脚本「干就完了」 — 不必先 source dev_up.ps1
+# Lite stack (db/docker-compose.db-lite.yml) 端口 5434；Full Timescale 端口 5433。
+# 你已经在跑 lite，就保持 5434；如果是 full 把环境变量自己改。
+_DEV_DEFAULT_DSN = "postgresql+psycopg2://proline:proline_dev@localhost:5434/proline_cad"
+if not os.getenv("POSTGRES_DSN"):
+    os.environ["POSTGRES_DSN"] = _DEV_DEFAULT_DSN
+    print(
+        f"\033[2m[diagnose_run] POSTGRES_DSN unset — falling back to dev default "
+        f"({_DEV_DEFAULT_DSN}). Override with $env:POSTGRES_DSN=... if needed.\033[0m"
+    )
 
 
 GREEN = "\033[92m"
@@ -66,13 +86,10 @@ def diagnose(run_id: str) -> int:
             text(
                 """
                 SELECT
-                    mc.id, mc.agent, mc.status, mc.created_at, mc.finished_at,
-                    mc.input_payload, mc.output_payload,
-                    sm.id AS site_model_id,
-                    sm.layer_count, sm.entity_total, sm.geometry_integrity_score
+                    mc.id, mc.agent, mc.status, mc.created_at,
+                    mc.input_payload, mc.output_payload
                 FROM mcp_contexts mc
-                LEFT JOIN site_models sm ON sm.cad_source_run_id = mc.id
-                WHERE mc.id = :rid
+                WHERE mc.id::text = :rid
                 """
             ),
             {"rid": run_id},
@@ -95,7 +112,7 @@ def diagnose(run_id: str) -> int:
                 "前端上传失败或 input_payload 没写入。重新上传。")
         _bullet(bool(ip.get("detected_format")), "detected_format", ip.get("detected_format") or "(missing)",
                 "魔术字节检测失败 — 文件不是合法 dwg/dxf。换文件。")
-        _bullet(row["status"] == "FINISHED", "status", row["status"],
+        _bullet(row["status"] in ("FINISHED", "SUCCESS", "DONE"), "status", row["status"],
                 "Run 还没跑完或者出错。先看 worker 日志。")
 
         # ── L1: ezdxf 解析 ────────────────────────────────
@@ -119,9 +136,17 @@ def diagnose(run_id: str) -> int:
         # ── L2: candidates 抽取 ────────────────────────────
         _section("L2 · candidates 抽取 (从 L1 的 layer/block 名生成 token 候选)")
         cand_count = semantics.get("candidate_count") or len(semantics.get("candidates") or [])
-        _bullet(cand_count > 0, "candidate_count", cand_count,
+        # 兜底：worker 把 candidate 划进 matched/quarantine 后 candidate_count 字段
+        # 不一定回填，可能是 0；用 matched+quarantine 反推真实候选数。
+        matched_count_for_l2 = semantics.get("matched_terms_count") or 0
+        quar_count_for_l2 = semantics.get("quarantine_terms_count") or 0
+        effective_cand = cand_count or (matched_count_for_l2 + quar_count_for_l2)
+        _bullet(effective_cand > 0, "候选总数（含 matched+quarantine）", effective_cand,
                 "L1 给的 layer/block 名经清洗后全部为空（纯数字、过短、纯特殊字符）。"
                 " 检查 _extract_candidates(): app/services/parse/cad_parser.py")
+        if cand_count == 0 and effective_cand > 0:
+            print(f"     {DIM}注：semantics.candidate_count={cand_count} 但 matched+quarantine={effective_cand} —"
+                  f" worker 没回填 candidate_count 字段，这是 bookkeeping bug，不影响业务。{RESET}")
 
         # ── L3: taxonomy 匹配（已识别 = matched_terms）────
         _section("L3 · taxonomy 匹配（已识别 = matched_terms）")
@@ -198,22 +223,50 @@ def diagnose(run_id: str) -> int:
 
         # ── 综合诊断 ────────────────────────────────────
         _section("⚖ 综合诊断（最可能的单点根因）")
+        b_section = sections.get("B_softmatch") or {}
+        b_gold_size = (b_section.get("stats") or {}).get("gold_size", 0)
+
         if entity_total == 0:
             print(f"  {RED}● 原图就是空的（entity_total=0）。这是文件问题，不是程序问题。{RESET}")
         elif not layer_names and not block_names:
             print(f"  {RED}● DWG 所有内容都画在 '0' 图层 + 没有 BLOCK 定义。{RESET}")
             print(f"  {YELLOW}  这是文件问题（设计师没规范分层）。但程序也可以更宽容 — 把 '0' 加入候选。{RESET}")
+        elif gold_count > 0 and b_gold_size == 0:
+            print(f"  {RED}● ★ 时序错位 ★ 这次 run 跑的时候 taxonomy_terms 还没初始化（B 拿到 gold_size=0），"
+                  f"但现在表里已经有 {gold_count} 条 gold。{RESET}")
+            print(f"  {YELLOW}  解决：删掉这个 run，重新上传同一份文件 — Worker 这次能拿到 gold 了。{RESET}")
+            print(f"     在 dashboard 点删除 → 重新拖文件，1 分钟搞定。")
         elif gold_count == 0:
             print(f"  {RED}● ★ 最可能的根因 ★ taxonomy_terms 表是空的。{RESET}")
             print(f"  {YELLOW}  这是程序问题（corpus 没初始化）。修复：{RESET}")
             print(f"     python -m scripts.sync_corpus_to_minio")
             print(f"     或重新执行 alembic upgrade + 启动时 init seeder。")
-        elif cand_count > 0 and matched_count == 0:
-            print(f"  {YELLOW}● candidate 有 {cand_count}，但一个都没命中 gold（共 {gold_count} 条）。{RESET}")
-            print(f"  {YELLOW}  这通常是文件问题（命名规范和 corpus 不一致），但 corpus 也可能太薄。{RESET}")
-            sample = (semantics.get("candidates") or [])[:8]
-            if sample:
-                print(f"  {DIM}  candidate 样例: {[c.get('term_normalized') for c in sample]}{RESET}")
+        elif effective_cand > 0 and matched_count == 0:
+            print(f"  {YELLOW}● 候选有 {effective_cand} 条，但一个都没命中 gold（共 {gold_count} 条）。{RESET}")
+            # 看看 layer / block 命名长什么样，给文件 vs 程序的判定
+            anonymous_blocks = sum(1 for b in block_names if b.startswith(("A$", "*")))
+            numeric_blocks = sum(1 for b in block_names if b and b[1:].isdigit() and len(b) <= 4)
+            generic_layers = [
+                ln for ln in layer_names
+                if ln.lower() in {"hatch", "0", "defpoints"} or "." in ln or len(ln) < 3
+            ]
+            file_smell = (
+                anonymous_blocks > len(block_names) * 0.5
+                or numeric_blocks > len(block_names) * 0.5
+                or len(generic_layers) >= len(layer_names) * 0.5
+            )
+            if file_smell:
+                print(f"  {RED}  → 这是文件问题。命名特征：{RESET}")
+                print(f"  {DIM}    匿名 block (A$/*): {anonymous_blocks}/{len(block_names)}")
+                print(f"    纯数字 block (D0/D1/...): {numeric_blocks}/{len(block_names)}")
+                print(f"    通用图层 (hatch/dwgmodels.com/系统图层): {generic_layers}{RESET}")
+                print(f"  {YELLOW}  这种 DXF 通常是从 dwgmodels.com / GrabCAD 等图库下载的样图，没有业务语义。{RESET}")
+                print(f"  {YELLOW}  解决：用真实工厂图（中文 '清洗机/珩磨机/缸盖装配' 或 英文 'HARDING/EXTAR/Landis'）。{RESET}")
+            else:
+                print(f"  {YELLOW}  这通常是文件问题（命名规范和 corpus 不一致），但 corpus 也可能太薄。{RESET}")
+                sample = (semantics.get("candidates") or [])[:8]
+                if sample:
+                    print(f"  {DIM}  candidate 样例: {[c.get('term_normalized') for c in sample]}{RESET}")
         elif matched_count > 0:
             print(f"  {GREEN}● 数据链条正常 — '已识别'={matched_count}。如果 UI 仍显示空，看前端：{RESET}")
             print(f"     web/src/app/sites/[runId]/page.tsx 是否在读 enrich.sections.C_arbiter.promotion_candidates")
