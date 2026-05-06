@@ -1,33 +1,47 @@
 # ProLine CAD — 航空工艺产线 AI 规划平台
 
-> AI-driven aerospace production line lifecycle planning platform.  
-> 三 Agent 闭环系统：CAD 解析 → 约束检查 → 布局优化，实现 **8 分钟端到端交付、0 返工、99.8% 约束遵循度**。
+> AI-driven aerospace production line lifecycle planning platform.
+> 五智能体闭环（Parse → Constraint → Layout → Simulation → Report），
+> Orchestrator 统一调度，**MCP 协议为唯一跨 Agent 通道**，全链路 `mcp_context_id` 可追溯。
+
+**当前阶段**：ParseAgent v1.0 GA / ConstraintAgent M0 蓝图（category +
+review_status + source hash 已落地）；LayoutAgent / SimAgent / ReportAgent
+按 [docs/ROADMAP_3D_SIM.md](docs/ROADMAP_3D_SIM.md) 推进。
 
 ---
 
 ## 系统架构
 
 ```
-┌─────────────┐     ┌──────────────────┐     ┌──────────────────┐
-│  CAD 文件    │────▶│  Agent1          │────▶│  Agent2          │
-│  DWG/IFC/   │     │  ParseAgent      │     │  ConstraintAgent │
-│  STEP/DXF   │     │  本体识别/语义抽取 │     │  Z3 约束验证     │
-└─────────────┘     └──────────────────┘     └──────────────────┘
-                                                      │
-                    ┌──────────────────┐               │
-                    │  Orchestrator    │◀──────────────┘
-                    │  MCP 流程编排    │
-                    │  mcp_context链路  │───────┐
-                    └──────────────────┘       │
-                                               ▼
-                    ┌──────────────────┐     ┌──────────────────┐
-                    │  AuditStore      │◀────│  Agent3          │
-                    │  审计/追溯/PDF    │     │  LayoutAgent     │
-                    └──────────────────┘     │  GA 布局优化     │
-                                             └──────────────────┘
+                                  ┌──────────────────┐
+                                  │  Orchestrator     │
+                                  │  (Temporal-bound) │
+                                  └─────────┬─────────┘
+                                            │ MCP only
+            ┌────────────────┬──────────────┼──────────────┬────────────────┐
+            ▼                ▼              ▼              ▼                ▼
+   ┌────────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────────┐
+   │  ParseAgent    │ │ Constraint │ │  Layout    │ │ Simulation │ │ ReportAgent     │
+   │  DWG/IFC/STEP  │ │   Agent    │ │   Agent    │ │   Agent    │ │ (Feasibility)   │
+   │  → SiteModel   │ │  Z3 / KG   │ │  GA / GP   │ │  DES / PINN│ │  PDF / DOCX     │
+   └────────┬───────┘ └─────┬──────┘ └─────┬──────┘ └─────┬──────┘ └────────┬───────┘
+            │               │               │               │                  │
+            └───────────────┴───────┬───────┴───────────────┴──────────────────┘
+                                    ▼
+                            ┌─────────────────┐
+                            │ Dashboard BFF   │  app/  (FastAPI + Pydantic v2)
+                            │ + Web UI        │  web/  (Next.js 14 + React 18)
+                            └────────┬────────┘
+                                     │
+                            ┌────────┴────────┐
+                            │ Postgres 16 +   │  PostGIS · TimescaleDB · pgvector
+                            │ MinIO · NATS    │  (docker-compose.yml)
+                            │ Redis           │
+                            └─────────────────┘
 ```
 
-**核心原则**：MCP-First（Model Context Protocol）— 所有 Agent 间通过 MCP 通信，全链路 `mcp_context_id` 追溯。
+**铁律**：Agent 之间不允许直接 import / HTTP 调用；所有跨 Agent 数据流以
+`mcp_context_id` 为脊椎，由 Orchestrator 派发。详见 [CLAUDE.md](CLAUDE.md) §5。
 
 ---
 
@@ -35,65 +49,69 @@
 
 ### 环境要求
 
-- Python >= 3.11
-- Docker & Docker Compose（基础设施服务）
+- Python ≥ 3.11（推荐 3.13）
+- Node.js ≥ 20（前端 dashboard）
+- Docker & Docker Compose（PostGIS + MinIO + Redis 等）
 - Git
 
 ### 安装
 
-```bash
+```powershell
 # 克隆仓库
 git clone https://github.com/your-org/proline-cad.git
 cd proline-cad
 
-# 创建并激活虚拟环境
+# Python 虚拟环境
 python -m venv .venv
-# Windows CMD:
-.venv\Scripts\activate
-# Windows PowerShell:
-.venv\Scripts\Activate.ps1
-# Linux/macOS:
-source .venv/bin/activate
+.\.venv\Scripts\Activate.ps1               # Windows PowerShell
+# source .venv/bin/activate                # Linux / macOS
 
-# 安装完整依赖（所有 Agent + 开发工具）
-pip install -e ".[all]"
+# 全栈安装（按需选 extras）
+pip install -e ".[parse,constraint,layout,dev]"
 
-# 或按需安装单个 Agent
-pip install -e ".[parse]"       # Agent1: ParseAgent
-pip install -e ".[constraint]"  # Agent2: ConstraintAgent
-pip install -e ".[layout]"      # Agent3: LayoutAgent
-pip install -e ".[dev]"         # 开发工具
+# 前端依赖
+npm --prefix web install
 ```
 
-### 启动基础设施
+### 一键启动开发环境
 
-```bash
-# 启动 PostgreSQL、MinIO、Kafka 等
-docker-compose up -d
+```powershell
+# 拉起 PostGIS 容器 + 跑 Alembic 迁移 + 启动 FastAPI (8000)
+.\scripts\dev_up.ps1 -ServeApi
 
-# 仅启动核心服务（轻量开发）
-docker-compose up -d postgres minio
+# 另一终端：启动 Next.js dashboard (3000)
+npm --prefix web run dev
 ```
+
+打开 [http://localhost:3000](http://localhost:3000)。后端 OpenAPI 文档：
+[http://localhost:8000/docs](http://localhost:8000/docs)。
 
 ### 运行测试
 
-```bash
-# Spike 技术验证测试（TDD 阶段）
-cd spikes && python -m pytest -m p0      # P0 关键测试
-cd spikes && python -m pytest            # 全量测试
-cd spikes && python -m pytest -m spike3  # 单个 Spike
+```powershell
+# Agent 单元 / 集成测试
+pytest agents/parse_agent/tests/ -q
+pytest agents/constraint_agent/tests/ -q
 
-# Agent 测试（实现阶段）
-pytest agents/                           # 所有 Agent 测试
-pytest agents/parse_agent/tests/         # 单个 Agent
+# 数据库不变量（需 POSTGRES_DSN）
+pytest tests/db/ -q
+
+# 应用层（BFF）测试
+pytest tests/app/ -q
+
+# Spike 验证（参考用，已冻结）
+pytest spikes/ -m p0
 ```
 
-### 代码质量
+### 代码质量与契约闸门
 
-```bash
-ruff check .          # Lint
-ruff format .         # Format
-mypy agents/ shared/  # 类型检查
+```powershell
+ruff check . ; ruff format . ; mypy agents/ shared/
+
+python scripts/check_constraint_fk_matrix.py  # 约束子系统 FK 矩阵
+python scripts/check_schema_drift.py          # Pydantic ↔ DDL 漂移
+python scripts/check_agent_isolation.py       # 跨 Agent import 防火墙
+python scripts/gold_eval.py                   # L1 gold 回归
 ```
 
 ---
@@ -102,82 +120,111 @@ mypy agents/ shared/  # 类型检查
 
 ```
 proline-cad/
-├── agents/                    # 三个 Agent 服务 + Orchestrator
-│   ├── parse_agent/           # Agent1: CAD 解析 → SiteModel
-│   ├── constraint_agent/      # Agent2: Z3 约束验证
-│   ├── layout_agent/          # Agent3: GA 布局优化
-│   └── orchestrator/          # 流程编排 + mcp_context 链路
-├── shared/                    # 共享库（数据模型、MCP 协议、审计）
-│   ├── models.py              # Pydantic 域模型
-│   ├── mcp_protocol.py        # MCP 消息格式
-│   ├── audit_store.py         # AuditStore 接口
-│   └── schemas/               # JSON Schema 定义
-├── spikes/                    # 10 个独立技术验证实验（TDD）
-│   ├── spike_01_dwg_parse/    # DWG/DXF 解析
-│   ├── spike_02_mcp_e2e/      # MCP 端到端通信
-│   ├── spike_03_collision/    # 碰撞检测 (R-Tree)
-│   ├── spike_04_des_sim/      # 离散事件仿真 (SimPy)
-│   ├── spike_05_llm_extract/  # LLM 约束提取
-│   ├── spike_06_temporal/     # Temporal 工作流
-│   ├── spike_07_3d_render/    # Three.js 3D 渲染
-│   ├── spike_08_pinn/         # PINN 代理模型
-│   ├── spike_09_rag/          # RAG 知识检索
-│   └── spike_10_report/       # 报告生成
-├── db/                        # 数据库 DDL 与迁移
-├── PRD/                       # 产品需求文档（中文）
-├── ExcPlan/                   # 执行计划文档
-├── docker-compose.yml         # 开发环境基础设施
-├── pyproject.toml             # Python 依赖管理 (PEP 621)
-├── requirements.txt           # Pinned 依赖
-├── CLAUDE.md                  # AI 助手项目指南
-├── CONTRIBUTING.md            # 贡献指南
-└── LICENSE                    # Apache-2.0
+├── agents/                         # 智能体（彼此隔离，仅 MCP 通信）
+│   ├── parse_agent/                # CAD → SiteModel（v1.0 GA）
+│   ├── constraint_agent/           # 工艺约束 / Z3 / KG（M0 蓝图）
+│   ├── layout_agent/               # 布局优化（占位）
+│   └── orchestrator/               # 流程编排 + mcp_context 链路
+├── app/                            # Dashboard BFF (FastAPI + Pydantic v2)
+│   ├── main.py                     # FastAPI 入口 + lifespan
+│   ├── routers/                    # auth / dashboard_runs / quarantine /
+│   │                               # constraints / health / metrics
+│   ├── schemas/                    # 出入口 DTO
+│   ├── services/                   # 业务编排
+│   └── observability/              # logging / tracing / metrics 中间件
+├── web/                            # 前端 dashboard (Next.js 14 + React 18)
+│   └── src/                        # ConstraintsPanel / Sites / Runs / Quarantine
+├── shared/                         # 跨 Agent 共享层
+│   ├── models.py                   # Pydantic 域模型 + 枚举（单一事实来源）
+│   ├── db_schemas.py               # SQLAlchemy 2.0 ORM
+│   └── mcp_protocol.py             # MCP 消息格式
+├── db/                             # 数据库
+│   ├── alembic/versions/           # 0001 → 0021（最新：constraint_source_hash）
+│   └── docker-compose.db*.yml      # 独立 DB 启动
+├── docs/                           # 工程文档
+│   ├── constraint_subsystem_data_model.md   # 约束子系统权威蓝图
+│   ├── data_architecture.md
+│   ├── parse_agent_steps_overview.md
+│   ├── ROADMAP_3D_SIM.md
+│   └── adr/                        # ADR 决策记录
+├── tests/                          # 跨 Agent / DB / app 集成测试
+│   ├── db/                         # 不变量 + FK 矩阵 + RLS
+│   └── app/                        # BFF API e2e
+├── scripts/                        # 闸门脚本 + 开发辅助
+│   ├── dev_up.ps1                  # 一键拉起 dev stack
+│   ├── check_constraint_fk_matrix.py
+│   ├── check_schema_drift.py
+│   ├── check_agent_isolation.py
+│   └── gold_eval.py
+├── spikes/                         # 冻结 PoC（参考用，新代码不要写在此）
+├── PRD/                            # 产品需求文档（中文）
+├── ExcPlan/                        # 执行计划
+├── docker-compose.yml              # 全栈基础设施
+├── pyproject.toml                  # Python 依赖（PEP 621）
+├── CLAUDE.md                       # AI 助手 / 工程规约
+└── CONTRIBUTING.md                 # 贡献指南
 ```
 
 ---
 
-## 执行路线图（10-12 周）
+## 当前里程碑状态（截至 2026-05-06）
 
-| 阶段 | 时间 | 交付物 | 验收准则 |
-|------|------|--------|---------|
-| **M0** 项目准备 | Week 1 | CAD 样本 5+，约束库 CS-001 | 15+ 约束条目，infra ready |
-| **M1** 基础设施 | Week 2-3 | MCP Toolbelt + AuditStore | PG/Milvus/Kafka 运行 |
-| **M2** ParseAgent | Week 4-5 | SiteModel + Ontology Graph | confidence≥0.90, p95≤5s |
-| **M3** ConstraintAgent | Week 6-7 | Z3 验证 + 冲突诊断 | 检出率 100%, FP<0.2% |
-| **M4** LayoutAgent | Week 8-9 | Top3 方案 + GA 优化 | best score≥0.80 |
-| **M5** 编排+LLM+UI | Week 10 | 端到端闭环 | <10min, 链路完整 |
-| **M6** 测试+部署 | Week 11-12 | CI/CD + Staging | UAT 通过 |
+| 阶段 | Agent / 子系统 | 交付物 | 状态 |
+|---|---|---|---|
+| M0 | ParseAgent v1.0 | DWG/DXF/IFC/STEP → SiteModel + Asset 分类 + H4/H5 Validator | **GA** |
+| M0 | ConstraintAgent | category / review_status / source_hash 蓝图（migration 0019/0020/0021） | **完成** |
+| M0 | Dashboard BFF + Web | runs / quarantine / constraints / RBAC | **运行中** |
+| M1 | ConstraintAgent | 上传文档接入 ConstraintSource + LLM 抽取 | 进行中 |
+| M2 | LayoutAgent | GA + 干涉检测 + Top-K 候选 | 规划中 |
+| M3 | SimAgent | DES + 瓶颈诊断 + PINN 代理 | 规划中 |
+| M4 | ReportAgent + Orchestrator | 端到端闭环 + ROI + PDF | 规划中 |
+
+详见 [ExcPlan/](ExcPlan/) 与 [docs/ROADMAP_3D_SIM.md](docs/ROADMAP_3D_SIM.md)。
 
 ---
 
 ## 核心领域概念
 
-| 术语 | 含义 |
-|------|------|
-| **SiteModel** | 解析后的底图模型（site_guid: SM-xxx）— 包含 Assets、Obstacles、ExclusionZones |
-| **Asset** | 参数化设备（MDI、Footprint、Ports） |
-| **ConstraintSet** | 约束集合（CS-xxx），含硬约束（MUST）和软约束（SHOULD） |
-| **mcp_context** | MCP 链路上下文，全链路追溯唯一标识符 |
-| **CP-A Token** | 信任门令牌 — SiteModel 必须通过所有前置条件才能进入布局阶段 |
+| 术语 | 含义 | 出处 |
+|---|---|---|
+| **SiteModel** | 解析后的底图模型（`site_seed_xxx`），含 Assets / Obstacles / ExclusionZones | [shared/models.py](shared/models.py) |
+| **Asset / AssetType** | 参数化设备（22 闭枚举：CncMachine / WeldingRobot / Conveyor / Buffer / ...） | [shared/models.py](shared/models.py) |
+| **ConstraintSet** | 约束集合（`cs_xxx`），版本化聚合根（draft / active / archived） | ADR-0005 |
+| **ProcessConstraint** | 单条工艺约束；4 维正交：`kind` × `class` × `category` × `authority` | [docs/constraint_subsystem_data_model.md](docs/constraint_subsystem_data_model.md) |
+| **ConstraintCategory** | 业务类别（10 闭枚举：SPATIAL / SEQUENCE / TORQUE / SAFETY / ...） | migration 0019 |
+| **ConstraintReviewStatus** | 行级审核生命周期（draft / under_review / approved / rejected / superseded） | migration 0020 |
+| **ConstraintSource** | 法规 / 标准 / SOP / MBD 元数据 + MinIO blob；`hash_sha256` 去重 | migration 0021 |
+| **ConstraintCitation** | 约束 ↔ 源多对多连接（即 `SOURCED_FROM` 边） | ADR-0006 |
+| **ProcessGraph** | DAG 物化缓存（per ConstraintSet），`has_cycle=false` 是 publish gate | ADR-0005 |
+| **mcp_context_id** | MCP 链路上下文唯一标识；所有产物必须挂回上游 context | [CLAUDE.md](CLAUDE.md) |
+
+完整实体关系与 INV-1..INV-10 不变量见
+[docs/constraint_subsystem_data_model.md](docs/constraint_subsystem_data_model.md)。
 
 ---
 
 ## 文档索引
 
-- **架构与哲学** → [CLAUDE.md](CLAUDE.md)
+- **工程规约 / AI 助手指南** → [CLAUDE.md](CLAUDE.md)
+- **数据架构** → [docs/data_architecture.md](docs/data_architecture.md)
+- **约束子系统权威蓝图** → [docs/constraint_subsystem_data_model.md](docs/constraint_subsystem_data_model.md)
+- **ParseAgent 输入生命周期** → [docs/parse_agent_input_lifecycle.md](docs/parse_agent_input_lifecycle.md)
+- **3D / 仿真路线图** → [docs/ROADMAP_3D_SIM.md](docs/ROADMAP_3D_SIM.md)
+- **决策记录（ADR）** → [docs/adr/](docs/adr/)
 - **执行计划** → [ExcPlan/](ExcPlan/)
-- **PRD 文档（中文）** → [PRD/](PRD/)
-- **技术验证计划** → [PRD/step5.2-关键技术验证计划.md](PRD/step5.2-关键技术验证计划.md)
-- **数据模型规范** → [PRD/PRD全局附录_数据模型与接口规范.md](PRD/PRD全局附录_数据模型与接口规范.md)
+- **PRD（中文）** → [PRD/](PRD/)
+- **数据模型与接口规范** → [PRD/PRD全局附录_数据模型与接口规范.md](PRD/PRD全局附录_数据模型与接口规范.md)
 - **贡献指南** → [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---
 
-## 语言约定
+## 语言与约定
 
-- **代码标识符、API 名称**：英文
-- **文档注释、测试描述、PRD**：中文
-- **UI**：无 emoji，简洁、留白、淡色调
+- **代码标识符 / API 名称 / commit message**：英文
+- **PRD / 文档注释 / 测试描述 / UI 文案**：中文（zh-CN）
+- **UI**：无 emoji；冷白 + 浅灰 + `#2563eb` / `#14b8a6` 点缀
+- **依赖管理**：`pyproject.toml` 单一事实来源，禁止手编 `requirements.txt`
+- **迁移**：Alembic 单向；任何已合并 revision 不可修改
 
 ---
 

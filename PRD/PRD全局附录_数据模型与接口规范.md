@@ -1,9 +1,52 @@
 # PRD 全局附录：数据模型、MCP接口规范与决策记录
 
-**版本**：v1.0  
-**日期**：2026年4月10日  
-**关联PRD**：PRD-1 ~ PRD-5（产线+工艺PRD v1.2）  
-**状态**：初版发布  
+**版本**：v1.2（2026-05-06 修订）
+**初版日期**：2026 年 4 月 10 日
+**关联 PRD**：PRD-1 ~ PRD-5（产线+工艺 PRD v1.2 / v3.0）
+**状态**：v1.0 概念性 ERD 仍然有效；**约束子系统**实际落地以下列权威文档为准
+
+---
+
+## 修订与权威指针（v1.2，**优先于 v1.0 同名章节**）
+
+> 本附录 v1.0 中关于 **Constraint / SourceDocument / ProcessGraph** 的字段命名
+> 与表结构是**概念性 ERD**，与最终数据库实现存在差异。下列文档为**单一事实来源**，
+> 当本附录与之冲突时，**以下列文档为准**：
+
+| 子系统 | 权威文档 | ADR |
+|---|---|---|
+| 约束子系统（ConstraintSet / ProcessConstraint / ConstraintSource / Citations） | [docs/constraint_subsystem_data_model.md](../docs/constraint_subsystem_data_model.md) | [ADR-0005](../docs/adr/0005-constraint-set-schema.md) · [ADR-0006](../docs/adr/0006-constraint-evidence-authority.md) |
+| ParseAgent / SiteModel / Asset 分类 | [docs/parse_agent_steps_overview.md](../docs/parse_agent_steps_overview.md) · [shared/models.py](../shared/models.py) | — |
+| 数据架构（仓储 / 时序 / 向量） | [docs/data_architecture.md](../docs/data_architecture.md) | — |
+| MCP Context 实现 | [shared/mcp_protocol.py](../shared/mcp_protocol.py) · `mcp_contexts` 表 | — |
+
+### 与 v1.0 ERD 的关键 Delta（截至 migration 0021）
+
+1. **不存在 `Constraint` 单一表**。语义维度（kind / class / category /
+   authority / conformance / scope / rationale / confidence）全部下沉到
+   **`process_constraints`** 单表，多维正交。详见
+   [约束蓝图 §0 §4](../docs/constraint_subsystem_data_model.md)。
+2. **不存在 `SourceDocument` / `documents` 表**。SOP / MBOM / MBD / 法规等
+   均为 **`constraint_sources`** 的实例，由 `authority` 字段（`statutory /
+   industry / enterprise / project / heuristic / preference`）区分；文件二进制
+   存 MinIO，`doc_object_key` 指向对象存储 key；`hash_sha256` 唯一去重。
+3. **约束 ↔ 源 N:M 关系**走 **`constraint_citations`** 连接表（即知识图谱中的
+   `SOURCED_FROM` 边），不通过 `process_constraints.source_document_id` 冗余字段
+   表达（该字段计划在 G5 任务中废弃）。
+4. **约束的业务类别**（SPATIAL / SEQUENCE / TORQUE / SAFETY / ENVIRONMENTAL /
+   REGULATORY / QUALITY / RESOURCE / LOGISTICS / OTHER）通过 enum
+   **`constraint_category`** 列承载（migration 0019）。
+5. **行级审核生命周期**通过 **`constraint_review_status`** 列承载
+   （`draft / under_review / approved / rejected / superseded`，migration 0020）；
+   与 `constraint_sets.status`（集合层 `draft / active / archived`）正交。
+6. **`constraint_sources.classification`** 决定 LLM 路由
+   （`PUBLIC / INTERNAL / CONFIDENTIAL / SECRET`，migration 0021）。
+7. **不变量 INV-1..INV-10** 由 DB CHECK / partial unique index / publish gate
+   多层强制；CI 闸门：`pytest tests/db/test_constraint_invariants.py` +
+   `python scripts/check_constraint_fk_matrix.py`。
+
+下文 v1.0 章节保留作为**概念性参考**；具体落库字段以权威文档与
+[shared/db_schemas.py](../shared/db_schemas.py) 为准。
 
 ---
 
@@ -279,29 +322,57 @@ erDiagram
 
 ### 2.1 枚举类型定义
 
+> **以下表为 v1.0 概念枚举**。约束子系统的实际落地枚举（含 v1.2 新增）见
+> [shared/models.py](../shared/models.py) 与
+> [docs/constraint_subsystem_data_model.md §4](../docs/constraint_subsystem_data_model.md)。
+
 | 枚举名 | 值域 | 说明 |
 |--------|------|------|
-| `ConstraintType` | `hard`, `soft`, `preference` | 硬约束不可违反；软约束可优化；偏好参考 |
-| `ConstraintSeverity` | `critical`, `major`, `minor` | 约束违反的严重程度 |
+| `ConstraintType` | `hard`, `soft`, `preference` | 概念命名；落库为 `process_constraints.class` |
+| `ConstraintSeverity` | `critical`, `major`, `minor` | 约束违反的严重程度（落库为 `severity`） |
 | `PortType` | `input`, `output`, `bidirectional`, `service` | 设备端口类型 |
 | `PortDirection` | `north`, `south`, `east`, `west`, `up`, `down` | 端口朝向 |
 | `ZoneType` | `structural_column`, `fire_escape`, `utility`, `custom` | 禁区类型 |
 | `EdgeType` | `conveyor`, `agv`, `manual`, `crane` | 工序间物流方式 |
-| `DocumentFormat` | `docx`, `pdf`, `txt`, `xlsx` | 源文档格式 |
-| `ProjectStatus` | `draft`, `in_progress`, `review`, `approved`, `archived` | 项目状态 |
+| `DocumentFormat` | `docx`, `pdf`, `txt`, `xlsx` | 源文档格式（落库为 `constraint_sources.url_or_ref` MIME 推断） |
+| `ProjectStatus` | `draft`, `in_progress`, `review`, `approved`, `archived` | 项目状态（`projects` 表尚未建，VARCHAR 占位） |
+
+#### v1.2 新增（约束子系统实际枚举）
+
+| 枚举名 | 值域 | 落库列 | 来源 |
+|--------|------|------|------|
+| `ConstraintKind` | `predecessor / resource / takt / exclusion` | `process_constraints.kind` | ADR-0005 |
+| `ConstraintClass` | `hard / soft / preference` | `process_constraints.class` | ADR-0005 |
+| `ConstraintCategory` | `SPATIAL / SEQUENCE / TORQUE / SAFETY / ENVIRONMENTAL / REGULATORY / QUALITY / RESOURCE / LOGISTICS / OTHER` | `process_constraints.category` | migration 0019 |
+| `ConstraintAuthority` | `statutory / industry / enterprise / project / heuristic / preference` | `process_constraints.authority` | ADR-0006 |
+| `ConstraintConformance` | `MUST / SHOULD / MAY` | `process_constraints.conformance` | ADR-0006 |
+| `ConstraintReviewStatus` | `draft / under_review / approved / rejected / superseded` | `process_constraints.review_status` | migration 0020 |
+| `ConstraintParseMethod` | `MANUAL_UI / EXCEL_IMPORT / MBOM_IMPORT / PMI_ENGINE / LLM_INFERENCE` | `process_constraints.parse_method` | migration 0020 |
+| `ConstraintSetStatus` | `draft / active / archived` | `constraint_sets.status` | ADR-0005 |
+| `ConstraintSourceClassification` | `PUBLIC / INTERNAL / CONFIDENTIAL / SECRET` | `constraint_sources.classification` | migration 0021 |
+| `AssetType`（22 闭枚举） | `Equipment / Conveyor / LiftingPoint / Zone / Wall / Door / Pipe / Column / Window / CncMachine / ElectricalPanel / StorageRack / Annotation / Other / StampingPress / WeldingRobot / HandlingRobot / Agv / Buffer / OperatorStation / InspectionStation / RobotCell` | `assets.type` | [shared/models.py](../shared/models.py) |
 
 ### 2.2 全局ID编码规则
 
 | 实体 | ID格式 | 示例 |
 |------|--------|------|
 | Project | `proj_{uuid4_short}` | `proj_a1b2c3d4` |
-| SiteModel | `site_{uuid4_short}` | `site_e5f6g7h8` |
-| Asset | `asset_{uuid4_short}` | `asset_i9j0k1l2` |
-| Constraint | `cst_{uuid4_short}` | `cst_m3n4o5p6` |
+| SiteModel | `site_{uuid4_short}` | `site_e5f6g7h8`（实际种子样本：`site_seed_001`） |
+| Asset | `asset_{uuid4_short}` | `asset_i9j0k1l2`（ParseAgent 产出：`MDI-XXXXXXXX`） |
+| Constraint | `cst_{uuid4_short}` | `cst_m3n4o5p6`（落库 `process_constraints.constraint_id`，UI 习惯 `PC-XXXXXX`） |
 | Layout | `layout_{uuid4_short}` | `layout_q7r8s9t0` |
 | SimRun | `sim_{uuid4_short}` | `sim_u1v2w3x4` |
 | Report | `rpt_{uuid4_short}` | `rpt_y5z6a7b8` |
 | MCP Context | `ctx_{agent}_{timestamp}_{seq}` | `ctx_parse_20260408T103000_001` |
+
+#### v1.2 新增（约束子系统）
+
+| 实体 | ID 列 | 格式约束 | 示例 |
+|------|------|----------|------|
+| ConstraintSet | `constraint_set_id` | `^cs_[a-z0-9_]+$` | `cs_default_active` |
+| ConstraintSource | `source_id` | `^src_[a-z0-9_]+$`（DB CHECK 强制） | `src_gb50016_2014` |
+| ConstraintCitation | `id` | UUID v4 | — |
+| ProcessGraph | `id` | UUID v4 | — |
 
 ---
 
