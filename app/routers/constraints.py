@@ -37,6 +37,11 @@ from app.schemas.constraints import (
 )
 from app.services.constraints_validator import validate_constraints
 from shared.db_schemas import AuditLogAction, ProcessConstraint, SiteModel
+from shared.models import (
+    ConstraintCategory,
+    ConstraintParseMethod,
+    ConstraintReviewStatus,
+)
 
 
 log = get_logger(__name__)
@@ -54,6 +59,17 @@ _db_operator = get_db_for(_operator_or_admin)
 
 
 _KIND_FILTERS = {"predecessor", "resource", "takt", "exclusion"}
+
+
+# Allowed source -> targets for review_status (blueprint §2 state machine).
+# 'superseded' is reserved for M4 conflict arbitration; not user-driven here.
+_REVIEW_TRANSITIONS: dict[str, frozenset[str]] = {
+    "draft":        frozenset({"draft", "under_review", "rejected"}),
+    "under_review": frozenset({"under_review", "approved", "rejected"}),
+    "approved":     frozenset({"approved", "superseded"}),
+    "rejected":     frozenset({"rejected", "draft"}),
+    "superseded":   frozenset({"superseded"}),
+}
 
 
 def _ensure_site(db: Session, site_model_id: str) -> None:
@@ -100,6 +116,8 @@ def list_constraints(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     kind: str | None = Query(None),
+    category: ConstraintCategory | None = Query(None),
+    review_status: ConstraintReviewStatus | None = Query(None),
     active_only: bool = Query(True),
 ) -> ConstraintListResponse:
     _ensure_site(db, site_model_id)
@@ -116,6 +134,10 @@ def list_constraints(
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
         base = base.where(ProcessConstraint.kind == kind)
+    if category is not None:
+        base = base.where(ProcessConstraint.category == category.value)
+    if review_status is not None:
+        base = base.where(ProcessConstraint.review_status == review_status.value)
     if active_only:
         base = base.where(ProcessConstraint.is_active.is_(True))
 
@@ -155,6 +177,14 @@ def create_constraint(
     payload_dict = body.payload.model_dump(by_alias=True)
     kind = payload_dict["kind"]
 
+    # blueprint G1/G2 defaults: manual UI rows are trusted (approved + verified now).
+    review = (body.review_status or ConstraintReviewStatus.APPROVED).value
+    parse_method = (body.parse_method or ConstraintParseMethod.MANUAL_UI).value
+    category = (body.category or ConstraintCategory.OTHER).value
+    now = datetime.now(tz=timezone.utc)
+    verified_by = user.actor if review == ConstraintReviewStatus.APPROVED.value else None
+    verified_at = now if review == ConstraintReviewStatus.APPROVED.value else None
+
     row = ProcessConstraint(
         constraint_id=body.constraint_id,
         site_model_id=site_model_id,
@@ -162,6 +192,11 @@ def create_constraint(
         payload=payload_dict,
         priority=body.priority,
         is_active=body.is_active,
+        category=category,
+        review_status=review,
+        parse_method=parse_method,
+        verified_by_user_id=verified_by,
+        verified_at=verified_at,
         created_by=user.actor,
     )
     db.add(row)
@@ -231,6 +266,30 @@ def update_constraint(
     if body.is_active is not None:
         row.is_active = body.is_active
         changed["is_active"] = body.is_active
+    if body.category is not None:
+        row.category = body.category.value
+        changed["category"] = body.category.value
+    if body.review_status is not None:
+        new_status = body.review_status.value
+        allowed = _REVIEW_TRANSITIONS.get(row.review_status, frozenset())
+        if new_status not in allowed:
+            raise AppError(
+                error_code="VALIDATION_ERROR",
+                message=(
+                    f"illegal review_status transition "
+                    f"'{row.review_status}' -> '{new_status}'."
+                ),
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        row.review_status = new_status
+        if new_status == ConstraintReviewStatus.APPROVED.value:
+            row.verified_by_user_id = user.actor
+            row.verified_at = datetime.now(tz=timezone.utc)
+            row.needs_re_review = False
+        changed["review_status"] = new_status
+    if body.needs_re_review is not None:
+        row.needs_re_review = body.needs_re_review
+        changed["needs_re_review"] = body.needs_re_review
 
     if not changed:
         raise AppError(

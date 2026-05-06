@@ -520,6 +520,22 @@ class ProcessConstraint(Base):
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
     priority: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("50"))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    # ── migration 0019: business taxonomy (blueprint G1) ──
+    category: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'OTHER'")
+    )
+    # ── migration 0020: row-level review lifecycle (blueprint G2) ──
+    review_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'draft'")
+    )
+    parse_method: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'MANUAL_UI'")
+    )
+    verified_by_user_id: Mapped[str | None] = mapped_column(String(100))
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    needs_re_review: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("FALSE")
+    )
     created_by: Mapped[str | None] = mapped_column(String(100))
     mcp_context_id: Mapped[str | None] = mapped_column(
         String(100), ForeignKey("mcp_contexts.mcp_context_id")

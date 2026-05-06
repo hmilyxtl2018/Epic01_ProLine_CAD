@@ -2,6 +2,10 @@
 
 Per-`kind` payload validation is enforced via a discriminated union so
 clients get clear 422s instead of opaque DB CHECK errors.
+
+M0 (blueprint G1+G2) extends every I/O model with ``category`` and
+``review_status`` plus the supporting audit fields, mirroring the
+enums in ``shared/models.py``.
 """
 
 from __future__ import annotations
@@ -10,6 +14,12 @@ from datetime import datetime
 from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from shared.models import (
+    ConstraintCategory,
+    ConstraintParseMethod,
+    ConstraintReviewStatus,
+)
 
 
 # ── per-kind payload models ─────────────────────────────────────────────
@@ -84,6 +94,10 @@ class ConstraintCreate(BaseModel):
     payload: ConstraintPayload
     priority: int = Field(50, ge=0, le=100)
     is_active: bool = True
+    # M0 G1/G2: optional on input; router defaults if omitted.
+    category: ConstraintCategory | None = None
+    review_status: ConstraintReviewStatus | None = None
+    parse_method: ConstraintParseMethod | None = None
 
 
 class ConstraintUpdate(BaseModel):
@@ -92,6 +106,9 @@ class ConstraintUpdate(BaseModel):
     payload: ConstraintPayload | None = None
     priority: int | None = Field(None, ge=0, le=100)
     is_active: bool | None = None
+    category: ConstraintCategory | None = None
+    review_status: ConstraintReviewStatus | None = None
+    needs_re_review: bool | None = None
 
 
 class ConstraintItem(BaseModel):
@@ -106,6 +123,12 @@ class ConstraintItem(BaseModel):
     payload: dict
     priority: int
     is_active: bool
+    category: ConstraintCategory = ConstraintCategory.OTHER
+    review_status: ConstraintReviewStatus = ConstraintReviewStatus.APPROVED
+    parse_method: ConstraintParseMethod = ConstraintParseMethod.MANUAL_UI
+    verified_by_user_id: str | None = None
+    verified_at: datetime | None = None
+    needs_re_review: bool = False
     created_by: str | None = None
     mcp_context_id: str | None = None
     created_at: datetime

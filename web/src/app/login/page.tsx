@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
 import type { Role } from "@/lib/types";
@@ -9,6 +9,14 @@ import type { Role } from "@/lib/types";
 const ROLES: Role[] = ["viewer", "operator", "reviewer", "admin"];
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
+  );
+}
+
+function LoginPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const next = sp?.get("next") || "/runs";

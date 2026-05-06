@@ -185,6 +185,50 @@ export type ConstraintPayload =
   | TaktPayload
   | ExclusionPayload;
 
+// ── M0 (blueprint G1/G2/G4) — closed enums mirrored from shared/models.py ──
+
+export const CONSTRAINT_CATEGORIES = [
+  "SPATIAL",
+  "SEQUENCE",
+  "TORQUE",
+  "SAFETY",
+  "ENVIRONMENTAL",
+  "REGULATORY",
+  "QUALITY",
+  "RESOURCE",
+  "LOGISTICS",
+  "OTHER",
+] as const;
+export type ConstraintCategory = (typeof CONSTRAINT_CATEGORIES)[number];
+
+export const CONSTRAINT_REVIEW_STATUSES = [
+  "draft",
+  "under_review",
+  "approved",
+  "rejected",
+  "superseded",
+] as const;
+export type ConstraintReviewStatus =
+  (typeof CONSTRAINT_REVIEW_STATUSES)[number];
+
+export const CONSTRAINT_PARSE_METHODS = [
+  "MANUAL_UI",
+  "EXCEL_IMPORT",
+  "MBOM_IMPORT",
+  "PMI_ENGINE",
+  "LLM_INFERENCE",
+] as const;
+export type ConstraintParseMethod = (typeof CONSTRAINT_PARSE_METHODS)[number];
+
+export const CONSTRAINT_SOURCE_CLASSIFICATIONS = [
+  "PUBLIC",
+  "INTERNAL",
+  "CONFIDENTIAL",
+  "SECRET",
+] as const;
+export type ConstraintSourceClassification =
+  (typeof CONSTRAINT_SOURCE_CLASSIFICATIONS)[number];
+
 export interface ConstraintItem {
   id: string;
   constraint_id: string;
@@ -193,6 +237,12 @@ export interface ConstraintItem {
   payload: ConstraintPayload;
   priority: number;
   is_active: boolean;
+  category: ConstraintCategory;
+  review_status: ConstraintReviewStatus;
+  parse_method: ConstraintParseMethod;
+  verified_by_user_id: string | null;
+  verified_at: string | null;
+  needs_re_review: boolean;
   created_by: string | null;
   mcp_context_id: string | null;
   created_at: string;
@@ -211,12 +261,18 @@ export interface ConstraintCreateRequest {
   payload: ConstraintPayload;
   priority?: number;
   is_active?: boolean;
+  category?: ConstraintCategory;
+  review_status?: ConstraintReviewStatus;
+  parse_method?: ConstraintParseMethod;
 }
 
 export interface ConstraintUpdateRequest {
   payload?: ConstraintPayload;
   priority?: number;
   is_active?: boolean;
+  category?: ConstraintCategory;
+  review_status?: ConstraintReviewStatus;
+  needs_re_review?: boolean;
 }
 
 export interface ValidationIssue {

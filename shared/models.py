@@ -59,6 +59,64 @@ class ConstraintType(str, Enum):
     SOFT = "SOFT"
 
 
+class ConstraintCategory(str, Enum):
+    """约束业务类别（migration 0019 / blueprint G1）。
+
+    与 ``kind``（求解器形状：predecessor/resource/takt/exclusion）正交：
+    ``kind`` 决定如何被消费，``category`` 决定如何被人审视、归类、配色。
+    枚举为闭集；新增需 ADR（[CLAUDE.md](../CLAUDE.md) §10）。
+    """
+    SPATIAL = "SPATIAL"
+    SEQUENCE = "SEQUENCE"
+    TORQUE = "TORQUE"
+    SAFETY = "SAFETY"
+    ENVIRONMENTAL = "ENVIRONMENTAL"
+    REGULATORY = "REGULATORY"
+    QUALITY = "QUALITY"
+    RESOURCE = "RESOURCE"
+    LOGISTICS = "LOGISTICS"
+    OTHER = "OTHER"
+
+
+class ConstraintReviewStatus(str, Enum):
+    """单条约束行级审核生命周期（migration 0020 / blueprint G2）。
+
+    与 ``constraint_sets.status``（draft/active/archived）独立：
+    集合层管发布版本，行层管审核工作流。仅 ``approved`` 行可进入
+    publish gate（INV-5）。
+    """
+    DRAFT = "draft"
+    UNDER_REVIEW = "under_review"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    SUPERSEDED = "superseded"
+
+
+class ConstraintParseMethod(str, Enum):
+    """约束行的来源通道（migration 0020）。
+
+    用于审计 + 可观测性：UI 列表里区分人工与自动产物，
+    ADR-0006 §8.1 Q1 要求每条约束可追溯。
+    """
+    MANUAL_UI = "MANUAL_UI"
+    EXCEL_IMPORT = "EXCEL_IMPORT"
+    MBOM_IMPORT = "MBOM_IMPORT"
+    PMI_ENGINE = "PMI_ENGINE"
+    LLM_INFERENCE = "LLM_INFERENCE"
+
+
+class ConstraintSourceClassification(str, Enum):
+    """``constraint_sources.classification`` 取值（migration 0021）。
+
+    决定 LLM 路由：``CONFIDENTIAL`` / ``SECRET`` 强制走本地模型。
+    见 PRD-2 §6.2。
+    """
+    PUBLIC = "PUBLIC"
+    INTERNAL = "INTERNAL"
+    CONFIDENTIAL = "CONFIDENTIAL"
+    SECRET = "SECRET"
+
+
 class LinkType(str, Enum):
     """本体语义关系类型。"""
     APPLIES_TO = "APPLIES_TO"

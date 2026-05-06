@@ -17,6 +17,8 @@ import { api } from "@/lib/api";
 import type {
   ConstraintItem,
   ConstraintKind,
+  ConstraintCategory,
+  ConstraintReviewStatus,
   ConstraintCreateRequest,
   ConstraintPayload,
   ConstraintUpdateRequest,
@@ -36,6 +38,35 @@ const KIND_META: Record<
   resource:    { label: "资源", icon: "◆", chipClass: "bg-amber-50 text-amber-700" },
   takt:        { label: "节拍", icon: "⏱", chipClass: "bg-sky-50 text-sky-700" },
   exclusion:   { label: "互斥", icon: "✕", chipClass: "bg-rose-50 text-rose-700" },
+};
+
+// blueprint G1 — business taxonomy. Tailwind JIT-safe static classes.
+const CATEGORY_META: Record<
+  ConstraintCategory,
+  { label: string; chipClass: string }
+> = {
+  SPATIAL:       { label: "空间",   chipClass: "bg-blue-50 text-blue-700" },
+  SEQUENCE:      { label: "顺序",   chipClass: "bg-violet-50 text-violet-700" },
+  TORQUE:        { label: "力矩",   chipClass: "bg-orange-50 text-orange-700" },
+  SAFETY:        { label: "安全",   chipClass: "bg-rose-50 text-rose-700" },
+  ENVIRONMENTAL: { label: "环境",   chipClass: "bg-teal-50 text-teal-700" },
+  REGULATORY:    { label: "适航",   chipClass: "bg-fuchsia-50 text-fuchsia-700" },
+  QUALITY:       { label: "质量",   chipClass: "bg-emerald-50 text-emerald-700" },
+  RESOURCE:      { label: "资源",   chipClass: "bg-amber-50 text-amber-700" },
+  LOGISTICS:     { label: "物流",   chipClass: "bg-cyan-50 text-cyan-700" },
+  OTHER:         { label: "其他",   chipClass: "bg-zinc-100 text-zinc-600" },
+};
+
+// blueprint G2 — row-level review lifecycle.
+const REVIEW_META: Record<
+  ConstraintReviewStatus,
+  { label: string; chipClass: string }
+> = {
+  draft:        { label: "草稿",   chipClass: "bg-zinc-100 text-zinc-600" },
+  under_review: { label: "审核中", chipClass: "bg-amber-50 text-amber-700" },
+  approved:     { label: "已批准", chipClass: "bg-emerald-50 text-emerald-700" },
+  rejected:     { label: "已驳回", chipClass: "bg-rose-50 text-rose-700" },
+  superseded:   { label: "已替换", chipClass: "bg-zinc-100 text-zinc-500 line-through" },
 };
 
 interface Props {
@@ -340,9 +371,11 @@ function Center({
             <thead className="sticky top-0 z-10 bg-zinc-50 text-[11px] uppercase tracking-wider text-zinc-500">
               <tr>
                 <th className="px-3 py-2 font-medium">类型</th>
+                <th className="px-3 py-2 font-medium">类别</th>
                 <th className="px-3 py-2 font-medium">ID</th>
                 <th className="px-3 py-2 font-medium">摘要</th>
                 <th className="px-3 py-2 text-right font-medium">优先级</th>
+                <th className="px-3 py-2 font-medium">审核</th>
                 <th className="px-3 py-2 font-medium">状态</th>
               </tr>
             </thead>
@@ -350,6 +383,8 @@ function Center({
               {items.map((i) => {
                 const active = i.constraint_id === selectedId;
                 const meta = KIND_META[i.kind];
+                const cat = CATEGORY_META[i.category] ?? CATEGORY_META.OTHER;
+                const rev = REVIEW_META[i.review_status] ?? REVIEW_META.draft;
                 return (
                   <tr
                     key={i.id}
@@ -364,12 +399,25 @@ function Center({
                         <span>{meta.icon}</span> {meta.label}
                       </span>
                     </td>
+                    <td className="px-3 py-2">
+                      <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${cat.chipClass}`}>
+                        {cat.label}
+                      </span>
+                    </td>
                     <td className="px-3 py-2 font-mono text-[11px] text-zinc-600">
                       {i.constraint_id}
                     </td>
                     <td className="px-3 py-2 text-zinc-700">{summary(i)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-zinc-500">
                       {i.priority}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${rev.chipClass}`}>
+                        {rev.label}
+                        {i.needs_re_review ? (
+                          <span className="ml-0.5 text-[9px] text-amber-600">!</span>
+                        ) : null}
+                      </span>
                     </td>
                     <td className="px-3 py-2">
                       {i.is_active ? (
