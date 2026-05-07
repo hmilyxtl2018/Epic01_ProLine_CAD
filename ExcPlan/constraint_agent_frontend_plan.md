@@ -461,22 +461,81 @@ SOP/PMI Document (HierarchyNode kind=Document)
 
 ### 4.5 后端落地清单（M1.5 新里程碑，插于 M1 与 M2 之间）
 
-| PR | 主题 | 内容 |
+#### 4.5.0 数据模型增量总览（落地后真实表结构）
+
+> 这是 BE-PR-M1.5-1 完成后数据库的真实形态，供后端实现与前端契约对齐。完整 DDL 见
+> [migration 0022](../db/alembic/versions/0022_hierarchy_nodes.py)、
+> [0023](../db/alembic/versions/0023_constraint_scopes.py)、
+> [0024](../db/alembic/versions/0024_process_constraints_phases.py)；ORM 见
+> [shared/db_schemas.py](../shared/db_schemas.py)。
+
+**新表 ① `hierarchy_nodes`**（IEC 81346 三视角统一层级表）
+
+| 列 | 类型 | 业务含义 |
 |---|---|---|
-| BE-PR-M1.5-1 | 枚举 + Alembic | `LifecyclePhase` / `HierarchyAspect` / `node_kind` 扩展；migration 0022 `hierarchy_nodes`、0023 `constraint_scopes`、0024 `process_constraints.applicable_phases JSONB` + data migration 兜底默认值 |
-| BE-PR-M1.5-2 | HierarchyService | 树 CRUD、`rds_code` 解析与校验、`parent_id` 环检测、批量导入 |
-| BE-PR-M1.5-3 | ScopeBindingService | S1–S4 自动绑定 pipeline、`inherit_to_descendants` 展开、置信度门槛 |
-| BE-PR-M1.5-4 | API 表层 | `GET /sites/{id}/hierarchy`、`POST /constraints/{id}/scopes`、`DELETE /constraints/{id}/scopes/{scope_id}`、`GET /constraints/4d-matrix?phase=&aspect=` |
-| BE-PR-M1.5-5 | 不变量与 L0 | INV-14/15/16 入 `tests/db/test_constraint_invariants.py`；schema drift 检查 |
+| `id` UUID PK | UUID | 主键 |
+| `rds_code` | VARCHAR(64) UNIQUE-live | 工艺师可读的参考标识，如 `+S03.A1-K1` |
+| `aspect` | enum FUNCTION / PRODUCT / LOCATION | 视角，决定该节点能承载哪类约束 |
+| `node_kind` | enum (13 值) | ISA-95 层级 + Procedure / Document / AssetTypeTemplate |
+| `parent_id` | UUID FK self | 自引用形成层级树；CHECK 禁自环 |
+| `asset_guid` | VARCHAR(50) | 软指针指向既有 `assets` 行（不复制物理字段） |
+| `process_step_id` | UUID | 预留指向工序，工序表落地后接入 |
+| `site_model_id` | VARCHAR(50) FK | 隔离不同产线模型 |
+| `name_zh` / `name_en` | VARCHAR(200) | 中英双语显示名 |
+| `properties` | JSONB | 扩展属性（aspect_alias、CAD 句柄等） |
+| 共有列 | `mcp_context_id` / `schema_version` / `created_*` / `deleted_at` | 全局规范 |
+| **CHECK** | `ck_hn_aspect_kind_matrix` | INV-16：FUNCTION→{Procedure,Document}；LOCATION→ISA-95 6 层；PRODUCT→{Equipment,Tool,Fixture,Material,AssetTypeTemplate} |
+
+**新表 ② `constraint_scopes`**（Constraint ↔ Node N:M 绑定）
+
+| 列 | 类型 | 业务含义 |
+|---|---|---|
+| `id` UUID PK | UUID | 主键 |
+| `constraint_id` | UUID FK→`process_constraints` ON DELETE CASCADE | 被绑约束 |
+| `node_id` | UUID FK→`hierarchy_nodes` ON DELETE RESTRICT | 绑定目标节点；删节点必须先解绑，避免孤儿 |
+| `binding_strategy` | enum explicit_id / asset_type / semantic / manual | S1–S4，决定是否需要再审 |
+| `inherit_to_descendants` | BOOLEAN | TRUE 时约束沿子树继承，子节点可显式覆盖 |
+| `confidence` | NUMERIC(3,2) | 自动绑定置信度；< 0.80 进入审核队列 |
+| `verified_by_user_id` / `verified_at` | VARCHAR / TIMESTAMPTZ | 谁、何时确认 |
+| `binding_evidence` | JSONB | 原文片段、召回得分、备注 |
+| **CHECK** | `ck_cscope_manual_verified` | manual ⇒ verified_* NOT NULL（审计强约束） |
+| **UNIQUE-live** | `(constraint_id, node_id)` | 同一约束不重复绑同一节点 |
+
+**改表 ③ `process_constraints` 新增列**
+
+| 列 | 类型 | 业务含义 |
+|---|---|---|
+| `applicable_phases` | JSONB（数组） | 约束在哪些 LifecyclePhase 生效；INV-14 要求 ≥1 元素且属 8 值枚举 |
+| `valid_from` / `valid_to` | TIMESTAMPTZ NULL | 墙钟时间窗（M1.5 仅落字段，M2 上线查询） |
+| **数据迁移** | `needs_re_review = TRUE` | 既有 142 条约束强制再审，工艺师确认时空范围 |
+
+**新增不变量**
+
+- **INV-14**：approved 行必须 ≥1 个 `applicable_phases`。
+- **INV-15**：approved 行必须 ≥1 条 `constraint_scopes`。
+- **INV-16**：aspect ↔ node_kind 矩阵合法（CHECK 已落表）。
+- **INV-17**：`binding_strategy='manual'` ⇒ `verified_*` 必填（CHECK 已落表）。
+
+#### 4.5.1 PR 拆分（每个 PR 显式标注业务价值）
+
+| PR | 主题 | 业务价值（为什么值得做） | 内容 | DoD |
+|---|---|---|---|---|
+| BE-PR-M1.5-1 | 枚举 + Alembic 0022/23/24 | **解锁审批前置校验**：没有时空字段，前端 §4.6 FE-PR-8.5 的"未声明阶段/范围禁止 approve"就无据可依；当前 142 条约束悬空，发布即埋雷 | 4 个枚举入 `shared/models.py`；3 个 migration；ORM 同步；data migration `needs_re_review=TRUE` | `alembic upgrade head && downgrade -3 && upgrade head` 通过；schema drift = 0；导入烟囱通过 |
+| BE-PR-M1.5-2 | `HierarchyService` | **让工艺师能录入与维护层级**：层级表存在但无服务，UI 无法读写，整条链路堵在第一公里；同时为后续从 BIM/PLM 批量导入预留接口 | `rds_code` 解析（正则 + 视角前缀校验）、`parent_id` 环检测（递归 CTE）、批量 upsert、子树查询 `?depth=N` 分页 | 单元测试覆盖：合法/非法 RDS、自环、跨视角父子、深度 6 层；批量 1k 节点 < 2s |
+| BE-PR-M1.5-3 | `ScopeBindingService` | **把 142 条悬空约束自动归位**：纯人工绑定不现实，必须 S1（直写 ID）+ S2（类型匹配）+ S3（向量召回）打底，仅低置信度走人审；业务价值 = 工艺师工时从"逐条人工"降到"高低置信度分流" | S1–S4 流水线；`inherit_to_descendants` 展开（递归子树）；置信度门槛配置（默认 0.80）；写入 `binding_evidence` JSONB 留痕 | 142 条历史数据回放：S1+S2 自动命中率 ≥ 60%；S3 召回 Top-5 含正解 ≥ 85%；剩余进 review 队列 |
+| BE-PR-M1.5-4 | API 表层 | **前端可直接消费**：FE-PR-6.5/6.6/7.5/8.5 的所有交互都依赖这一层；不发布则前端无法启动 | `GET /sites/{id}/hierarchy?aspect=&depth=`、`POST /constraints/{id}/scopes`、`DELETE /constraints/{id}/scopes/{scope_id}`、`PATCH /constraints/{id}/phases`、`GET /constraints/4d-matrix?phase=&aspect=&node_kind=` | OpenAPI schema 冻结；MSW handler 同步；契约测试 ≥ 8 用例覆盖 4xx 边界 |
+| BE-PR-M1.5-5 | 不变量与 L0 | **守住"approved 即可信"承诺**：INV-14/15/16/17 一旦缺失，下游 LayoutAgent 仍会拿到没时空范围的约束，等于 0 分；同时阻止后续重构破坏不变量 | INV-14/15 入 `tests/db/test_constraint_invariants.py`（≥3 用例/项）；INV-16/17 验 CHECK 覆盖矩阵；`scripts/check_schema_drift.py` 增 hierarchy_nodes / constraint_scopes 校验 | gold 回放：构造违规行 INSERT 必报 23514；CI schema-check 阶段为绿 |
+
+**关键路径与价值递进**：M1.5-1 解锁字段 → M1.5-2 让数据可写 → M1.5-3 让历史数据自动归位 → M1.5-4 让前端消费 → M1.5-5 守住语义。任何一环缺失，FE-PR-6.5..8.5 都无法上线。
 
 ### 4.6 前端落地清单（追加到 §3.2 PR 表）
 
-| 新增 PR | 主题 | 包含组件 | 验收 |
-|---|---|---|---|
-| FE-PR-6.5 | 列表「时空标签」列 + 抽屉「时空范围」面板 | `LifecyclePhaseChips.tsx`、`ScopePanel.tsx` | 列表新列展示 `[设计·建造]@FUNCTION:OP-WING-MATE-001` 形式；抽屉可增删 scope |
-| FE-PR-6.6 | 层级树侧栏（替换/扩展 LeftRail） | `HierarchyTree.tsx`（Function/Product/Location 三 Tab） | 树筛选联动主列表；100 节点流畅滚动 |
-| FE-PR-7.5 | Tab ⑥ 4D 时空矩阵（M2.5，可选） | `Spacetime4DMatrix.tsx` 热力图 | 横 8 阶段 × 纵层级树；点击格子下钻列表 |
-| FE-PR-8.5 | 审批前置校验 | `ScopePanel` 与 `LifecyclePhaseChips` 强制必填 | `applicable_phases.size==0 || scopes.size==0` 时按钮禁用 + 提示 |
+| 新增 PR | 主题 | 业务价值 | 包含组件 | 验收 |
+|---|---|---|---|---|
+| FE-PR-6.5 | 列表「时空标签」列 + 抽屉「时空范围」面板 | 工艺师在列表能一眼看到"何时生效 + 作用对象"，不用每次点开抽屉；审核效率提升预计 ≥ 30% | `LifecyclePhaseChips.tsx`、`ScopePanel.tsx` | 列表新列展示 `[设计·建造]@FUNCTION:OP-WING-MATE-001` 形式；抽屉可增删 scope |
+| FE-PR-6.6 | 层级树侧栏（替换/扩展 LeftRail） | 让筛选从"按 site_model 平铺"升级为"按层级下钻"，工艺师定位特定工位约束的步数从 N 降到 2-3 | `HierarchyTree.tsx`（Function/Product/Location 三 Tab） | 树筛选联动主列表；100 节点流畅滚动 |
+| FE-PR-7.5 | Tab ⑥ 4D 时空矩阵（M2.5，可选） | 给项目经理 / 总师一张全局热力图：哪些阶段 × 哪些工位约束密度高 / 缺口大；驱动产能与排期决策 | `Spacetime4DMatrix.tsx` 热力图 | 横 8 阶段 × 纵层级树；点击格子下钻列表 |
+| FE-PR-8.5 | 审批前置校验 | 把 INV-14/15 直接前置到 UI，杜绝"approved 但悬空"约束流到 LayoutAgent 触发误报 | `ScopePanel` 与 `LifecyclePhaseChips` 强制必填 | `applicable_phases.size==0 || scopes.size==0` 时按钮禁用 + 提示 |
 
 ### 4.7 UI 增量交互规范
 

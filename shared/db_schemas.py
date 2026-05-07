@@ -536,6 +536,12 @@ class ProcessConstraint(Base):
     needs_re_review: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("FALSE")
     )
+    # ── migration 0024: temporal scope (ADR-0009) ──
+    applicable_phases: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[\"DESIGN\",\"OPERATION\"]'::jsonb")
+    )
+    valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    valid_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[str | None] = mapped_column(String(100))
     mcp_context_id: Mapped[str | None] = mapped_column(
         String(100), ForeignKey("mcp_contexts.mcp_context_id")
@@ -573,6 +579,207 @@ class ProcessConstraint(Base):
             "payload",
             postgresql_using="gin",
         ),
+        Index(
+            "idx_pc_applicable_phases_gin",
+            "applicable_phases",
+            postgresql_using="gin",
+        ),
+    )
+
+
+class HierarchyNode(Base):
+    """IEC 81346 / ISA-95 层级节点 (migration 0022 / ADR-0009).
+
+    统一承载 Function/Product/Location 三视角下的 Enterprise..Equipment
+    以及 Procedure / Document / AssetTypeTemplate 节点。``aspect`` 与
+    ``node_kind`` 的合法组合由 INV-16 以 CHECK 约束在表层保护。
+    """
+
+    __tablename__ = "hierarchy_nodes"
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    rds_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    aspect: Mapped[str] = mapped_column(String(16), nullable=False)
+    node_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    parent_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("hierarchy_nodes.id", ondelete="RESTRICT")
+    )
+    asset_guid: Mapped[str | None] = mapped_column(String(50))
+    process_step_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False))
+    site_model_id: Mapped[str | None] = mapped_column(
+        String(50), ForeignKey("site_models.site_model_id", ondelete="CASCADE")
+    )
+    name_zh: Mapped[str] = mapped_column(String(200), nullable=False)
+    name_en: Mapped[str | None] = mapped_column(String(200))
+    properties: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    created_by: Mapped[str | None] = mapped_column(String(100))
+    mcp_context_id: Mapped[str | None] = mapped_column(
+        String(100), ForeignKey("mcp_contexts.mcp_context_id")
+    )
+    schema_version: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default=text("1")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint(
+            "aspect IN ('FUNCTION','PRODUCT','LOCATION')",
+            name="ck_hn_aspect_enum",
+        ),
+        CheckConstraint(
+            "node_kind IN ('Enterprise','Site','Area','Line','WorkCenter','Station',"
+            "'Equipment','Tool','Fixture','Material','AssetTypeTemplate',"
+            "'Procedure','Document')",
+            name="ck_hn_node_kind_enum",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(properties) = 'object'",
+            name="ck_hn_properties_object",
+        ),
+        CheckConstraint(
+            "parent_id IS NULL OR parent_id <> id",
+            name="ck_hn_no_self_parent",
+        ),
+        CheckConstraint(
+            "(aspect = 'FUNCTION' AND node_kind IN ('Procedure','Document'))"
+            " OR (aspect = 'LOCATION' AND node_kind IN ('Enterprise','Site','Area','Line','WorkCenter','Station'))"
+            " OR (aspect = 'PRODUCT'  AND node_kind IN ('Equipment','Tool','Fixture','Material','AssetTypeTemplate'))",
+            name="ck_hn_aspect_kind_matrix",
+        ),
+        Index(
+            "uq_hn_rds_code_live",
+            "rds_code",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "idx_hn_parent",
+            "parent_id",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "idx_hn_aspect_kind",
+            "aspect",
+            "node_kind",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "idx_hn_site_model",
+            "site_model_id",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "idx_hn_asset_guid",
+            "asset_guid",
+            postgresql_where=text("asset_guid IS NOT NULL AND deleted_at IS NULL"),
+        ),
+        Index(
+            "idx_hn_properties_gin",
+            "properties",
+            postgresql_using="gin",
+        ),
+    )
+
+
+class ConstraintScope(Base):
+    """Constraint ↔ HierarchyNode N:M 绑定 (migration 0023 / ADR-0009).
+
+    携带绑定策略 S1–S4、允许后代继承、置信度与审核足迹。
+    INV-17 由 CHECK ``ck_cscope_manual_verified`` 在表层保护。
+    """
+
+    __tablename__ = "constraint_scopes"
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    constraint_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("process_constraints.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    node_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("hierarchy_nodes.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    binding_strategy: Mapped[str] = mapped_column(String(20), nullable=False)
+    inherit_to_descendants: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("FALSE")
+    )
+    confidence: Mapped[float] = mapped_column(
+        Numeric(3, 2), nullable=False, server_default=text("1.00")
+    )
+    verified_by_user_id: Mapped[str | None] = mapped_column(String(100))
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    binding_evidence: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    created_by: Mapped[str | None] = mapped_column(String(100))
+    mcp_context_id: Mapped[str | None] = mapped_column(
+        String(100), ForeignKey("mcp_contexts.mcp_context_id")
+    )
+    schema_version: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default=text("1")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint(
+            "binding_strategy IN ('explicit_id','asset_type','semantic','manual')",
+            name="ck_cscope_strategy_enum",
+        ),
+        CheckConstraint(
+            "confidence >= 0.00 AND confidence <= 1.00",
+            name="ck_cscope_confidence_range",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(binding_evidence) = 'object'",
+            name="ck_cscope_evidence_object",
+        ),
+        CheckConstraint(
+            "binding_strategy <> 'manual'"
+            " OR (verified_by_user_id IS NOT NULL AND verified_at IS NOT NULL)",
+            name="ck_cscope_manual_verified",
+        ),
+        Index(
+            "uq_cscope_constraint_node_live",
+            "constraint_id",
+            "node_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "idx_cscope_constraint",
+            "constraint_id",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "idx_cscope_node",
+            "node_id",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "idx_cscope_low_confidence",
+            "confidence",
+            postgresql_where=text("confidence < 0.80 AND deleted_at IS NULL"),
+        ),
     )
 
 
@@ -590,5 +797,7 @@ __all__ = [
     "QuarantineTerm",
     "AuditLogAction",
     "ProcessConstraint",
+    "HierarchyNode",
+    "ConstraintScope",
     "ASSET_TYPES",
 ]

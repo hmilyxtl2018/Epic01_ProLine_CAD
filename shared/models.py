@@ -17,7 +17,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 # ════════════════ 枚举类型 ════════════════
 
 
@@ -115,6 +114,66 @@ class ConstraintSourceClassification(str, Enum):
     INTERNAL = "INTERNAL"
     CONFIDENTIAL = "CONFIDENTIAL"
     SECRET = "SECRET"
+
+
+class LifecyclePhase(str, Enum):
+    """资产 / 约束生命周期阶段（migration 0024 / ADR-0009 §2.1）。
+
+    8 阶段对齐 ISO 55000 资产管理 + CAPEX 阶段划分。约束的
+    ``applicable_phases`` 是该枚举的子集，至少 1 个值（INV-14）。
+    """
+    CONCEPT = "CONCEPT"
+    DESIGN = "DESIGN"
+    CONSTRUCTION = "CONSTRUCTION"
+    COMMISSIONING = "COMMISSIONING"
+    OPERATION = "OPERATION"
+    MODIFICATION = "MODIFICATION"
+    MAINTENANCE = "MAINTENANCE"
+    DECOMMISSION = "DECOMMISSION"
+
+
+class HierarchyAspect(str, Enum):
+    """IEC 81346 三视角参考标识系统（migration 0022 / ADR-0009 §2.1）。
+
+    同一物理对象可被三个视角同时引用，但每个 HierarchyNode 行只属于
+    单一视角；跨视角等价由 ``properties`` 内的 ``aspect_alias`` 维护。
+    """
+    FUNCTION = "FUNCTION"  # 工艺/工序视角，前缀 "="
+    PRODUCT = "PRODUCT"    # 设备/工装/物料视角，前缀 "-"
+    LOCATION = "LOCATION"  # 场所/工位视角，前缀 "+"
+
+
+class HierarchyNodeKind(str, Enum):
+    """HierarchyNode 节点类型（migration 0022 / ADR-0009 §2.1）。
+
+    ISA-95 / IEC 62264 Equipment Hierarchy 扩展：在标准 8 层之外
+    叠加 Procedure / Document / AssetTypeTemplate 以承载 FUNCTION 与
+    模板视角；INV-16 限定 aspect ↔ node_kind 的合法组合。
+    """
+    # ── ISA-95 Equipment Hierarchy（LOCATION 视角主用）──
+    ENTERPRISE = "Enterprise"
+    SITE = "Site"
+    AREA = "Area"
+    LINE = "Line"
+    WORK_CENTER = "WorkCenter"
+    STATION = "Station"
+    # ── PRODUCT 视角主用 ──
+    EQUIPMENT = "Equipment"
+    TOOL = "Tool"
+    FIXTURE = "Fixture"
+    MATERIAL = "Material"
+    ASSET_TYPE_TEMPLATE = "AssetTypeTemplate"  # S2 类型匹配的模板节点
+    # ── FUNCTION 视角主用 ──
+    PROCEDURE = "Procedure"
+    DOCUMENT = "Document"
+
+
+class ConstraintBindingStrategy(str, Enum):
+    """约束 ↔ 实体绑定策略 S1–S4（migration 0023 / ADR-0009 §2.4）。"""
+    EXPLICIT_ID = "explicit_id"   # S1: SOP/PMI 直写 ID
+    ASSET_TYPE = "asset_type"     # S2: 类型匹配模板
+    SEMANTIC = "semantic"         # S3: 向量召回
+    MANUAL = "manual"             # S4: UI 人工绑定
 
 
 class LinkType(str, Enum):
