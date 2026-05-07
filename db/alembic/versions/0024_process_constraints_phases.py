@@ -64,7 +64,11 @@ _PHASES = (
 
 
 def upgrade() -> None:
-    phases_sql = ",".join(f"'{p}'" for p in _PHASES)
+    # Whitelist as a JSONB array literal so CHECK can use the JSONB containment
+    # operator ``<@`` (subset). Postgres forbids subqueries in CHECK
+    # expressions (FeatureNotSupported), so we cannot use
+    # ``NOT EXISTS (SELECT FROM jsonb_array_elements_text ...)`` here.
+    phases_jsonb = '[' + ",".join(f'"{p}"' for p in _PHASES) + ']'
 
     # ──────────────────────── 1. add columns ────────────────────────
     op.execute(
@@ -102,11 +106,7 @@ def upgrade() -> None:
                     ADD CONSTRAINT ck_pc_applicable_phases_array CHECK (
                         jsonb_typeof(applicable_phases) = 'array'
                     AND jsonb_array_length(applicable_phases) >= 1
-                    AND NOT EXISTS (
-                            SELECT 1
-                              FROM jsonb_array_elements_text(applicable_phases) AS p
-                             WHERE p NOT IN ({phases_sql})
-                        )
+                    AND applicable_phases <@ '{phases_jsonb}'::jsonb
                     );
             END IF;
 
