@@ -58,6 +58,16 @@ class ConstraintType(str, Enum):
     SOFT = "SOFT"
 
 
+class ConstraintSetStatus(str, Enum):
+    """约束集合生命周期状态（ADR-0005 / migration 0015）。
+
+    与 ``constraint_sets.status`` PG enum 一一对应；闭集，新增需 ADR + 迁移。
+    """
+    DRAFT = "draft"
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+
+
 class ConstraintCategory(str, Enum):
     """约束业务类别（migration 0019 / blueprint G1）。
 
@@ -343,11 +353,24 @@ class Constraint(BaseModel):
 
 
 class ConstraintSet(BaseModel):
-    """约束集合（版本化）。"""
-    constraint_set_id: str = "CS-001"
+    """约束集合（版本化容器）。
+
+    与 ``shared.db_schemas.ConstraintSet`` ORM 一一对齐（ADR-0005 / migration
+    0015）。约束本体存活在 ``process_constraints`` 行，通过 FK
+    ``constraint_set_id`` 聚合 —— 不再内联 ``hard_constraints /
+    soft_constraints`` JSONB 数组。
+    """
+    constraint_set_id: str = Field(default_factory=lambda: f"CS-{uuid.uuid4().hex[:6].upper()}")
     version: str = "v1.0"
-    hard_constraints: list[Constraint] = Field(default_factory=list)
-    soft_constraints: list[Constraint] = Field(default_factory=list)
+    project_id: str | None = None
+    site_model_id: str | None = None
+    status: ConstraintSetStatus = ConstraintSetStatus.DRAFT
+    description: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    meta: dict[str, Any] = Field(default_factory=dict)
+    published_at: datetime | None = None
+    published_by: str | None = None
+    mcp_context_id: str | None = None
 
 
 class Violation(BaseModel):
