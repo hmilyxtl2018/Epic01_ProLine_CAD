@@ -5,6 +5,7 @@
 定义在迁移：
 - [0025_v_constraints_at_node.py](../alembic/versions/0025_v_constraints_at_node.py)
 - [0026_data_architect_views.py](../alembic/versions/0026_data_architect_views.py)
+- [0027_time_dimension_views.py](../alembic/versions/0027_time_dimension_views.py)
 
 ## 视图清单
 
@@ -15,6 +16,8 @@
 | `v_constraint_bindings`       | 单条约束 ↔ 节点原始绑定（不展开继承）         | 审约束时看"它绑了哪些节点"            |
 | `v_active_constraints_at_node`| 单条约束 ↔ 实际命中节点（**展开继承**）        | 工位视角看"我身上有哪些约束在管我"    |
 | `v_node_constraint_load`      | 每个节点上活跃且已审批的约束计数（含继承）    | 仪表盘热力图；找"约束最多的工位"     |
+| `v_constraint_temporal`       | 单条约束的时间档案 + 四态结论                  | 找"已过期 / 30 天内将失效 / 未到生效"约束 |
+| `v_active_constraints_now`    | 当前 NOW() 生效 + 相位展平的命中视图           | 按 `phase = 'OPERATION'` 直接查无需写 JSON 操作符 |
 
 ## 与可读 SQL 模板的关系
 
