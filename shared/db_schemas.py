@@ -31,7 +31,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, ENUM as PG_ENUM, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 try:
@@ -139,8 +139,56 @@ class SiteModel(Base):
     )
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# Constraint domain — PG ENUM type references (created by migrations 0015..0020)
+# ════════════════════════════════════════════════════════════════════════════
+# `create_type=False` means SQLAlchemy will NOT issue CREATE TYPE — the types
+# already exist in the database (created by Alembic revisions). We just bind the
+# Python-side mapping. Mirrors `shared.models.Constraint*` enums one-to-one.
+
+PG_CONSTRAINT_CLASS = PG_ENUM(
+    "hard", "soft", "preference",
+    name="constraint_class", create_type=False,
+)
+PG_CONSTRAINT_SEVERITY = PG_ENUM(
+    "critical", "major", "minor",
+    name="constraint_severity", create_type=False,
+)
+PG_CONSTRAINT_AUTHORITY = PG_ENUM(
+    "statutory", "industry", "enterprise", "project", "heuristic", "preference",
+    name="constraint_authority", create_type=False,
+)
+PG_CONSTRAINT_CONFORMANCE = PG_ENUM(
+    "MUST", "SHOULD", "MAY",
+    name="constraint_conformance", create_type=False,
+)
+PG_CONSTRAINT_CATEGORY = PG_ENUM(
+    "SPATIAL", "SEQUENCE", "TORQUE", "SAFETY", "ENVIRONMENTAL",
+    "REGULATORY", "QUALITY", "RESOURCE", "LOGISTICS", "OTHER",
+    name="constraint_category", create_type=False,
+)
+PG_CONSTRAINT_REVIEW_STATUS = PG_ENUM(
+    "draft", "under_review", "approved", "rejected", "superseded",
+    name="constraint_review_status", create_type=False,
+)
+PG_CONSTRAINT_PARSE_METHOD = PG_ENUM(
+    "MANUAL_UI", "EXCEL_IMPORT", "MBOM_IMPORT", "PMI_ENGINE", "LLM_INFERENCE",
+    name="constraint_parse_method", create_type=False,
+)
+PG_CONSTRAINT_SET_STATUS = PG_ENUM(
+    "draft", "active", "archived",
+    name="constraint_set_status", create_type=False,
+)
+
+
 class ConstraintSet(Base):
-    """约束集表 — ConstraintAgent 输出。"""
+    """约束集表（migration 0015 重构 / blueprint G0）。
+
+    一个 site_model 可有多个 ConstraintSet（按版本/草稿/归档），但同一时间
+    至多一个 ``status='active'`` —— 由部分唯一索引 ``uq_cset_active_per_site``
+    保证。子约束行 (``process_constraints``) 通过 ``constraint_set_id`` FK
+    挂在这里。
+    """
 
     __tablename__ = "constraint_sets"
 
@@ -148,15 +196,36 @@ class ConstraintSet(Base):
         UUID(as_uuid=False), primary_key=True, server_default=text("gen_random_uuid()")
     )
     constraint_set_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    version: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'v1.0'"))
-    hard_constraints: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
-    soft_constraints: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    version: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'v1.0'")
+    )
+    project_id: Mapped[str | None] = mapped_column(String(50))
+    site_model_id: Mapped[str | None] = mapped_column(
+        String(50), ForeignKey("site_models.site_model_id", ondelete="SET NULL")
+    )
+    status: Mapped[str] = mapped_column(
+        PG_CONSTRAINT_SET_STATUS,
+        nullable=False,
+        server_default=text("'draft'::constraint_set_status"),
+    )
+    description: Mapped[str | None] = mapped_column(Text)
+    tags: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, server_default=text("'{}'::text[]")
+    )
     meta: Mapped[dict] = mapped_column(
         "metadata", JSONB, server_default=text("'{}'::jsonb")
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"))
-    schema_version: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("1"))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    published_by: Mapped[str | None] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("NOW()")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("NOW()")
+    )
+    schema_version: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default=text("2")
+    )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     mcp_context_id: Mapped[str | None] = mapped_column(
         String(100), ForeignKey("mcp_contexts.mcp_context_id")
@@ -164,11 +233,24 @@ class ConstraintSet(Base):
 
     __table_args__ = (
         Index(
-            "idx_constraint_sets_deleted_at",
-            "deleted_at",
+            "idx_cset_project",
+            "project_id",
             postgresql_where=text("deleted_at IS NULL"),
         ),
-        Index("idx_constraint_sets_mcp_context_id", "mcp_context_id"),
+        Index(
+            "idx_cset_site_status",
+            "site_model_id", "status",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index("idx_cset_tags", "tags", postgresql_using="gin"),
+        Index(
+            "uq_cset_active_per_site",
+            "site_model_id",
+            unique=True,
+            postgresql_where=text(
+                "status = 'active'::constraint_set_status AND deleted_at IS NULL"
+            ),
+        ),
     )
 
 
@@ -494,15 +576,26 @@ class AuditLogAction(Base):
 
 
 class ProcessConstraint(Base):
-    """Per-site_model 工艺约束 (Phase 2.2 / migration 0014).
+    """Per-site_model 工艺约束行 (migrations 0014..0024).
 
-    Four `kind`s share one row shape; per-kind payload schema lives in
-    ``app/schemas/constraints.py`` and is validated at the API layer:
+    四种 ``kind`` 共享一行结构（payload 形状由 API 层 ``app/schemas/constraints.py``
+    的 Pydantic 校验，不在 DDL 里强约束）：
 
     - ``predecessor`` ``{"from": asset_id, "to": asset_id}`` — DAG edge
     - ``resource``    ``{"asset_ids": [...], "resource": str, "capacity": int}``
     - ``takt``        ``{"asset_id": str, "min_s": float, "max_s": float}``
     - ``exclusion``   ``{"asset_ids": [...], "reason": str}``
+
+    业务语义维度（migration 0015..0021 增量补齐）：
+
+    - ``class``/``severity``/``authority``/``conformance`` — 硬软/严重度/权威/符合性
+      （ADR-0006 / blueprint G3 §4.2）
+    - ``category`` — 业务分类 (SAFETY/SEQUENCE/...)；与 ``kind`` 正交
+    - ``review_status``/``parse_method``/``verified_*`` — 行级审核生命周期 (G2)
+    - ``rationale``/``rule_expression``/``source_document_id``/``source_span``
+      — 工程依据与可追溯证据
+    - ``applicable_phases``/``valid_from``/``valid_to`` — 时空本体的时间维度
+      (ADR-0009)
     """
 
     __tablename__ = "process_constraints"
@@ -516,37 +609,96 @@ class ProcessConstraint(Base):
         ForeignKey("site_models.site_model_id", ondelete="CASCADE"),
         nullable=False,
     )
+    constraint_set_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("constraint_sets.id", ondelete="CASCADE"),
+    )
     kind: Mapped[str] = mapped_column(String(20), nullable=False)
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    priority: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("50"))
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    priority: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default=text("50")
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("TRUE")
+    )
+
+    # ── migration 0015: hard/soft + severity + weight + provenance ──
+    cls: Mapped[str] = mapped_column(
+        "class",
+        PG_CONSTRAINT_CLASS,
+        nullable=False,
+        server_default=text("'hard'::constraint_class"),
+    )
+    severity: Mapped[str] = mapped_column(
+        PG_CONSTRAINT_SEVERITY,
+        nullable=False,
+        server_default=text("'major'::constraint_severity"),
+    )
+    weight: Mapped[float] = mapped_column(
+        Numeric(4, 3), nullable=False, server_default=text("1.0")
+    )
+    rule_expression: Mapped[str | None] = mapped_column(Text)
+    rationale: Mapped[str | None] = mapped_column(Text)
+    confidence: Mapped[float | None] = mapped_column(Numeric(3, 2))
+    source_document_id: Mapped[str | None] = mapped_column(String(100))
+    source_span: Mapped[dict | None] = mapped_column(JSONB)
+    tags: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, server_default=text("'{}'::text[]")
+    )
+
+    # ── migration 0016: authority / conformance / scope (evidence routing) ──
+    authority: Mapped[str] = mapped_column(
+        PG_CONSTRAINT_AUTHORITY,
+        nullable=False,
+        server_default=text("'heuristic'::constraint_authority"),
+    )
+    conformance: Mapped[str] = mapped_column(
+        PG_CONSTRAINT_CONFORMANCE,
+        nullable=False,
+        server_default=text("'SHOULD'::constraint_conformance"),
+    )
+    scope: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+
     # ── migration 0019: business taxonomy (blueprint G1) ──
     category: Mapped[str] = mapped_column(
-        String(20), nullable=False, server_default=text("'OTHER'")
+        PG_CONSTRAINT_CATEGORY,
+        nullable=False,
+        server_default=text("'OTHER'::constraint_category"),
     )
+
     # ── migration 0020: row-level review lifecycle (blueprint G2) ──
     review_status: Mapped[str] = mapped_column(
-        String(20), nullable=False, server_default=text("'draft'")
+        PG_CONSTRAINT_REVIEW_STATUS,
+        nullable=False,
+        server_default=text("'draft'::constraint_review_status"),
     )
     parse_method: Mapped[str] = mapped_column(
-        String(20), nullable=False, server_default=text("'MANUAL_UI'")
+        PG_CONSTRAINT_PARSE_METHOD,
+        nullable=False,
+        server_default=text("'MANUAL_UI'::constraint_parse_method"),
     )
     verified_by_user_id: Mapped[str | None] = mapped_column(String(100))
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     needs_re_review: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("FALSE")
     )
+
     # ── migration 0024: temporal scope (ADR-0009) ──
     applicable_phases: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, server_default=text("'[\"DESIGN\",\"OPERATION\"]'::jsonb")
     )
     valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     valid_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     created_by: Mapped[str | None] = mapped_column(String(100))
     mcp_context_id: Mapped[str | None] = mapped_column(
         String(100), ForeignKey("mcp_contexts.mcp_context_id")
     )
-    schema_version: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("1"))
+    schema_version: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default=text("1")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("NOW()")
     )
@@ -568,10 +720,34 @@ class ProcessConstraint(Base):
             "priority >= 0 AND priority <= 100",
             name="ck_proc_constraints_priority_range",
         ),
+        CheckConstraint(
+            "weight >= 0 AND weight <= 1",
+            name="ck_weight_range",
+        ),
+        CheckConstraint(
+            "confidence IS NULL OR (confidence >= 0 AND confidence <= 1)",
+            name="ck_confidence_range",
+        ),
+        CheckConstraint(
+            "class <> 'hard'::constraint_class OR weight = 1.0",
+            name="ck_hard_full_weight",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(scope) = 'object'",
+            name="ck_scope_is_object",
+        ),
+        CheckConstraint(
+            "review_status <> 'approved'::constraint_review_status"
+            " OR (verified_by_user_id IS NOT NULL AND verified_at IS NOT NULL)",
+            name="ck_pc_review_approved_verified",
+        ),
+        CheckConstraint(
+            "valid_from IS NULL OR valid_to IS NULL OR valid_from < valid_to",
+            name="ck_pc_valid_window",
+        ),
         Index(
             "idx_proc_constraints_site_kind",
-            "site_model_id",
-            "kind",
+            "site_model_id", "kind",
             postgresql_where=text("deleted_at IS NULL"),
         ),
         Index(
@@ -579,6 +755,43 @@ class ProcessConstraint(Base):
             "payload",
             postgresql_using="gin",
         ),
+        Index(
+            "idx_pc_set_class",
+            "constraint_set_id", "class",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "idx_pc_set_severity",
+            "constraint_set_id", "severity",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "idx_pc_set_category",
+            "constraint_set_id", "category",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "idx_pc_set_review",
+            "constraint_set_id", "review_status",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "idx_pc_authority",
+            "authority",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "idx_pc_needs_re_review",
+            "constraint_set_id",
+            postgresql_where=text("needs_re_review IS TRUE AND deleted_at IS NULL"),
+        ),
+        Index(
+            "idx_pc_source_doc",
+            "source_document_id",
+            postgresql_where=text("source_document_id IS NOT NULL"),
+        ),
+        Index("idx_pc_tags", "tags", postgresql_using="gin"),
+        Index("idx_pc_scope_gin", "scope", postgresql_using="gin"),
         Index(
             "idx_pc_applicable_phases_gin",
             "applicable_phases",
