@@ -229,6 +229,8 @@ def _purge(engine: Engine, *, site: str, set_id: str, ctx: str) -> None:
             DELETE FROM constraint_sets WHERE constraint_set_id = :set_id;
             DELETE FROM asset_geometries WHERE site_model_id = :site;
             DELETE FROM site_models WHERE site_model_id = :site;
+            -- 必须先删 audit_log_actions（FK → mcp_contexts），再删 mcp_contexts
+            DELETE FROM audit_log_actions WHERE mcp_context_id = :ctx;
             DELETE FROM mcp_contexts WHERE mcp_context_id = :ctx;
         """), {"site": site, "set_id": set_id, "ctx": ctx})
 
