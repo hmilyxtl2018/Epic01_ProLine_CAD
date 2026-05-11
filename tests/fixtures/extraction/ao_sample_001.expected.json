@@ -1,0 +1,82 @@
+{
+  "fixture_meta": {
+    "document_id": "AO-DEMO-001",
+    "site_model_id": "site_seed_001",
+    "chunk": {
+      "chunk_id": "chunk_1",
+      "page": 1,
+      "char_start": 0,
+      "char_end": 162,
+      "content_hash": "60d12956223ac158a41d0a347aa9e16672ec01f3d8f0278643e10074e166ddb6"
+    },
+    "comment": "三条工艺约束 gold: 1 SEQUENCE / 1 RESOURCE / 1 SAFETY，覆盖 kind ∈ {predecessor, resource, exclusion}"
+  },
+  "expected_constraints": [
+    {
+      "kind": "predecessor",
+      "category": "SEQUENCE",
+      "class": "soft",
+      "severity": "major",
+      "authority": "project",
+      "conformance": "SHOULD",
+      "rule_expression": "precedes(S10, S20)",
+      "rationale": "AO 第 4.1 节：S10 检验完成后方可启动 S20 铆接。",
+      "applicable_phases": ["OPERATION"],
+      "valid_from": null,
+      "valid_to": null,
+      "scope": {
+        "node_rds_candidates": ["=PROC.S10", "=PROC.S20"],
+        "asset_guid_candidates": [],
+        "product_id": null
+      },
+      "source_document_id": "AO-DEMO-001",
+      "source_span": {"page": 1, "char_start": 43, "char_end": 69},
+      "span_text": "前序工序 S10 完成检验后方可开始 S20 铆接。",
+      "confidence": 0.85
+    },
+    {
+      "kind": "resource",
+      "category": "RESOURCE",
+      "class": "hard",
+      "severity": "major",
+      "authority": "enterprise",
+      "conformance": "MUST",
+      "rule_expression": "shared_resource('inspector_qc', [S20, S25])",
+      "rationale": "AO 第 4.2 节：S20 铆接与 S25 涂胶共用同一质检员，禁止同时执行。",
+      "applicable_phases": ["OPERATION"],
+      "valid_from": null,
+      "valid_to": null,
+      "scope": {
+        "node_rds_candidates": ["=PROC.S20", "=PROC.S25"],
+        "asset_guid_candidates": [],
+        "product_id": null
+      },
+      "source_document_id": "AO-DEMO-001",
+      "source_span": {"page": 1, "char_start": 80, "char_end": 115},
+      "span_text": "S20 铆接与 S25 涂胶共用同一名工艺质检员，两工位不得同时执行。",
+      "confidence": 0.78
+    },
+    {
+      "kind": "exclusion",
+      "category": "SAFETY",
+      "class": "hard",
+      "severity": "critical",
+      "authority": "enterprise",
+      "conformance": "MUST",
+      "rule_expression": "forbid_when(S20, air_pressure < 0.6)",
+      "rationale": "AO 第 4.3 节：气源压力低于 0.6 MPa 时禁止启动铆枪，属安全互锁。",
+      "applicable_phases": ["OPERATION"],
+      "valid_from": null,
+      "valid_to": null,
+      "scope": {
+        "node_rds_candidates": ["=PROC.S20"],
+        "asset_guid_candidates": [],
+        "product_id": null
+      },
+      "source_document_id": "AO-DEMO-001",
+      "source_span": {"page": 1, "char_start": 126, "char_end": 161},
+      "span_text": "作业前必须确认气源压力 ≥ 0.6 MPa，禁止在压力不足时启动铆枪。",
+      "confidence": 0.90
+    }
+  ]
+}
