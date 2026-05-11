@@ -31,7 +31,8 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, ENUM as PG_ENUM, JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 try:
@@ -996,6 +997,114 @@ class ConstraintScope(Base):
     )
 
 
+class ConstraintExtraction(Base):
+    """LLM/regex 抽取过程的原始 span 痕迹 (migration 0028 / ADR-0010).
+
+    与 ``constraint_citations``（0016 已策展引用）分层：本表是"过程层"，
+    一条约束可有 N 条原始抽取（多段共证）。LLM 抽取必带 ``llm_model`` +
+    ``prompt_version``，保证可回放；``span_hash`` 防伪并支撑同约束 + 同 span
+    的去重 (UNIQUE ``uq_ce_hash_per_constraint``)。
+    """
+
+    __tablename__ = "constraint_extractions"
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    process_constraint_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("process_constraints.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    document_id: Mapped[str] = mapped_column(Text, nullable=False)
+    chunk_id: Mapped[str | None] = mapped_column(Text)
+    page: Mapped[int | None] = mapped_column(Integer)
+    char_start: Mapped[int | None] = mapped_column(Integer)
+    char_end: Mapped[int | None] = mapped_column(Integer)
+    span_text: Mapped[str] = mapped_column(Text, nullable=False)
+    span_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    extractor_kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    llm_model: Mapped[str | None] = mapped_column(String(60))
+    prompt_version: Mapped[str | None] = mapped_column(String(40))
+    extraction_run_id: Mapped[str | None] = mapped_column(Text)
+    extraction_confidence: Mapped[float | None] = mapped_column(Numeric(3, 2))
+    extraction_payload: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    extracted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+    mcp_context_id: Mapped[str | None] = mapped_column(
+        String(100), ForeignKey("mcp_contexts.mcp_context_id")
+    )
+    schema_version: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default=text("1")
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint(
+            "extractor_kind IN ('llm','regex','manual_ui','imported')",
+            name="ck_ce_extractor_kind",
+        ),
+        CheckConstraint(
+            "length(span_text) BETWEEN 1 AND 1000",
+            name="ck_ce_span_text_len",
+        ),
+        CheckConstraint(
+            "span_hash ~ '^[0-9a-f]{64}$'",
+            name="ck_ce_span_hash_format",
+        ),
+        CheckConstraint("page IS NULL OR page >= 0", name="ck_ce_page_nonneg"),
+        CheckConstraint(
+            "char_start IS NULL OR char_start >= 0", name="ck_ce_char_range"
+        ),
+        CheckConstraint(
+            "char_end IS NULL OR char_start IS NULL OR char_end > char_start",
+            name="ck_ce_char_end_after_start",
+        ),
+        CheckConstraint(
+            "extraction_confidence IS NULL"
+            " OR (extraction_confidence >= 0 AND extraction_confidence <= 1)",
+            name="ck_ce_confidence_range",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(extraction_payload) = 'object'",
+            name="ck_ce_payload_object",
+        ),
+        CheckConstraint(
+            "extractor_kind <> 'llm'"
+            " OR (llm_model IS NOT NULL AND prompt_version IS NOT NULL)",
+            name="ck_ce_llm_metadata",
+        ),
+        Index(
+            "idx_ce_constraint",
+            "process_constraint_id",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "idx_ce_document",
+            "document_id",
+            "page",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "idx_ce_run",
+            "extraction_run_id",
+            postgresql_where=text(
+                "extraction_run_id IS NOT NULL AND deleted_at IS NULL"
+            ),
+        ),
+        Index(
+            "uq_ce_hash_per_constraint",
+            "process_constraint_id",
+            "span_hash",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+
 __all__ = [
     "Base",
     "metadata",
@@ -1012,5 +1121,6 @@ __all__ = [
     "ProcessConstraint",
     "HierarchyNode",
     "ConstraintScope",
+    "ConstraintExtraction",
     "ASSET_TYPES",
 ]
