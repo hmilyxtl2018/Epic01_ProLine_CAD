@@ -58,6 +58,76 @@ class ConstraintType(str, Enum):
     SOFT = "SOFT"
 
 
+class ConstraintKind(str, Enum):
+    """约束求解器形状（migration 0014 / ck_proc_constraints_kind）。
+
+    与 ``constraint_class`` PG enum 中的 ``constraint_kind`` 含义一致；
+    决定 payload schema 与求解器消费方式。闭集，新增需 ADR + 迁移。
+    """
+    PREDECESSOR = "predecessor"
+    RESOURCE = "resource"
+    TAKT = "takt"
+    EXCLUSION = "exclusion"
+
+
+class ConstraintClass(str, Enum):
+    """硬/软/偏好（migration 0015 PG enum ``constraint_class``）。
+
+    硬约束（``hard``）必须满足，软约束（``soft``）参与目标函数，
+    偏好（``preference``）只参与排序。``ck_hard_full_weight`` 强制
+    ``hard`` 行 weight=1.0。
+    """
+    HARD = "hard"
+    SOFT = "soft"
+    PREFERENCE = "preference"
+
+
+class ConstraintSeverity(str, Enum):
+    """约束严重度（migration 0015 PG enum ``constraint_severity``）。"""
+    CRITICAL = "critical"
+    MAJOR = "major"
+    MINOR = "minor"
+
+
+class ConstraintAuthority(str, Enum):
+    """约束权威等级（migration 0016 / ADR-0006 §2.1）。
+
+    L0..L5 依次递减；与 ``ConstraintClass`` 通过
+    ``ck_authority_class_coherence`` 联动：
+    - ``statutory|industry`` ⇒ class 必须为 ``hard``
+    - ``preference`` ⇒ class 不能为 ``hard``
+    """
+    STATUTORY = "statutory"
+    INDUSTRY = "industry"
+    ENTERPRISE = "enterprise"
+    PROJECT = "project"
+    HEURISTIC = "heuristic"
+    PREFERENCE = "preference"
+
+
+class ConstraintConformance(str, Enum):
+    """约束符合性等级（migration 0016 PG enum ``constraint_conformance``）。
+
+    取自 RFC 2119 / ISO Directives Part 2 词汇：``MUST`` 强制、
+    ``SHOULD`` 推荐、``MAY`` 可选。
+    """
+    MUST = "MUST"
+    SHOULD = "SHOULD"
+    MAY = "MAY"
+
+
+class ExtractorKind(str, Enum):
+    """``constraint_extractions.extractor_kind`` 取值（migration 0028 / ADR-0010）。
+
+    标识抽取通道：LLM 推理、正则、规则脚本、人工补录。
+    与 ``ck_ce_extractor_kind`` CHECK 一一对应。
+    """
+    LLM = "llm"
+    REGEX = "regex"
+    RULE = "rule"
+    HUMAN = "human"
+
+
 class ConstraintSetStatus(str, Enum):
     """约束集合生命周期状态（ADR-0005 / migration 0015）。
 

@@ -55,8 +55,8 @@
 
 ### 2.2 LLM 抽取的写入契约
 
-1. LLM 抽取写入 **永远 `parse_method='LLM_EXTRACT'`、`review_status='draft'`、`is_active=false`**；
-2. 同时写 ≥ 1 条 `constraint_extractions` 行，含 `span_hash = sha256(span_text)`，服务层校验 `span_text` 必须能在原文 chunk 命中（防 LLM 编造引用）；
+1. LLM 抽取写入 **永远 `parse_method='LLM_INFERENCE'`（migration 0020 既有枚举值；不另起 `LLM_EXTRACT` 以避免 PG enum ADD VALUE 跨事务陷阱）、`review_status='draft'`、`is_active=false`**；
+2. 同时写 ≥ 1 条 `constraint_extractions` 行（其中 `extractor_kind='llm'`），含 `span_hash = sha256(span_text)`，服务层校验 `span_text` 必须能在原文 chunk 命中（防 LLM 编造引用）；
 3. 整个抽取过程链路上一个 `mcp_context_id`，所有相关行 FK 指向它；
 4. 抽取服务**不写** `constraint_scopes`、**不写** `constraint_citations` —— 各自由 M2 / 审核流程负责。
 
