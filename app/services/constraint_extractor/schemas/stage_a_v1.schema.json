@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "proline://extractor/stage_a_v1/output",
+  "title": "Stage A output envelope",
+  "description": "ConstraintExtractor Stage A (high-recall span locator) output. Frozen: any change must bump STAGE_A_VERSION.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["candidates"],
+  "properties": {
+    "candidates": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["chunk_id", "span_start", "span_end", "span_text", "reason"],
+        "properties": {
+          "chunk_id":   {"type": "string", "minLength": 1, "maxLength": 64},
+          "span_start": {"type": "integer", "minimum": 0},
+          "span_end":   {"type": "integer", "minimum": 1},
+          "span_text":  {"type": "string", "minLength": 1, "maxLength": 1000},
+          "reason":     {"type": "string", "minLength": 1, "maxLength": 200}
+        }
+      }
+    }
+  }
+}

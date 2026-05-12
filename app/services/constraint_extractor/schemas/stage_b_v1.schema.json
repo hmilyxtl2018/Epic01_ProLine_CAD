@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "proline://extractor/stage_b_v1/output",
+  "title": "Stage B output (oneOf: structured constraint or skip)",
+  "description": "ConstraintExtractor Stage B (high-precision structuring) output. Frozen: any change must bump STAGE_B_VERSION.",
+  "oneOf": [
+    {
+      "$comment": "Form B: short-circuit when LLM judges the candidate is a heading/signature/false-positive.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["skip", "reason"],
+      "properties": {
+        "skip":   {"const": true},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 200}
+      }
+    },
+    {
+      "$comment": "Form A: full ExtractedConstraint mirroring app/schemas/constraint_extraction.py::ExtractedConstraint.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind", "category", "class", "severity", "authority", "conformance",
+        "rule_expression", "rationale", "applicable_phases",
+        "scope", "source_document_id", "source_span", "span_text", "confidence"
+      ],
+      "properties": {
+        "kind":        {"enum": ["predecessor", "resource", "takt", "exclusion"]},
+        "category":    {"enum": ["SPATIAL","SEQUENCE","TORQUE","SAFETY","ENVIRONMENTAL","REGULATORY","QUALITY","RESOURCE","LOGISTICS","OTHER"]},
+        "class":       {"enum": ["hard", "soft", "preference"]},
+        "severity":    {"enum": ["critical", "major", "minor"]},
+        "authority":   {"enum": ["statutory","industry","enterprise","project","heuristic","preference"]},
+        "conformance": {"enum": ["MUST", "SHOULD", "MAY"]},
+        "rule_expression": {"type": "string", "minLength": 1, "maxLength": 500},
+        "rationale":       {"type": "string", "minLength": 1, "maxLength": 1000},
+        "applicable_phases": {
+          "type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true,
+          "items": {"enum": ["CONCEPT","DESIGN","CONSTRUCTION","COMMISSIONING","OPERATION","MODIFICATION","MAINTENANCE","DECOMMISSION"]}
+        },
+        "valid_from": {"type": ["string", "null"], "format": "date-time"},
+        "valid_to":   {"type": ["string", "null"], "format": "date-time"},
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["node_rds_candidates", "asset_guid_candidates"],
+          "properties": {
+            "node_rds_candidates": {
+              "type": "array",
+              "maxItems": 32,
+              "items": {
+                "type": "string",
+                "$comment": "T4 wide form RDS pattern: IEC 81346 prefix + alphanumerics/underscores/dots. T6 will tighten to {2,5} segments.",
+                "pattern": "^[=+\\-][A-Za-z0-9_.]+$"
+              }
+            },
+            "asset_guid_candidates": {
+              "type": "array", "maxItems": 32,
+              "items": {"type": "string", "minLength": 1, "maxLength": 64}
+            },
+            "product_id": {"type": ["string", "null"], "maxLength": 64}
+          }
+        },
+        "source_document_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "source_span": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["page", "char_start", "char_end"],
+          "properties": {
+            "page":       {"type": "integer", "minimum": 0},
+            "char_start": {"type": "integer", "minimum": 0},
+            "char_end":   {"type": "integer", "minimum": 1}
+          }
+        },
+        "span_text":  {"type": "string", "minLength": 1, "maxLength": 1000},
+        "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0}
+      }
+    }
+  ]
+}

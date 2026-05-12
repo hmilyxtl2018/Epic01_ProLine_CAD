@@ -148,33 +148,109 @@
 ---
 
 ### T4. ConstraintExtractor 服务 + 双 provider
-**目的**：可调用的抽取服务，stub 与真 LLM 同形。
+**目的**：可调用的抽取服务，stub 与真 LLM 同形；输出形状、通过标准、置信度分档全部冻结成可机检契约。
 
-**改动**
-- 新建 `app/services/constraint_extractor/__init__.py`、`extractor.py`：
+#### T4.0 输出契约（在写代码之前先冻结）
+
+**Stage A 信封**：`{"candidates": ExtractCandidate[]}`，最多 64 条。
+
+**Stage B 双形 oneOf**（节省 token 同时减少 LLM 为错圈编枚举值的次生幻觉）：
+
+- 形 A：完整 `ExtractedConstraint`（与 [app/schemas/constraint_extraction.py](app/schemas/constraint_extraction.py) 一致）。
+- 形 B：`{"skip": true, "reason": "<= 200 字>"}` —— LLM 判断该 candidate 是错圈/标题/签字时短路。
+
+**模型签名**（`llm_model` / `prompt_version` / `extraction_run_id`）由**服务层**注入到 `constraint_extractions`，**不**写进 LLM 输出 schema（LLM 不掌握自己的元信息，写了也不可信）。
+
+**两份 Schema 文件**（落盘位置）：
+
+```
+app/services/constraint_extractor/schemas/
+    stage_a_v1.schema.json
+    stage_b_v1.schema.json
+```
+
+`__init__.py` 导出 `STAGE_A_SCHEMA` / `STAGE_B_SCHEMA` 常量。
+
+**RDS pattern（T4 宽版）**：`^[=+\-][A-Za-z0-9_.]+$`。允许 `=S20` 之类单段；T6 跑通真实 hierarchy 后收紧到 `{2,5}` 段。
+
+#### T4.1 通过标准（4 层校验）
+
+| 层 | 适用阶段 | 标准 | 失败处置 |
+|---|---|---|---|
+| **L0 形状** | A + B | 合法 JSON 顶层对象，满足 oneOf | 该批 / 该条丢弃，`rejected.json_shape += 1` |
+| **L1 契约** | A + B | `model_validate()` 通过（枚举/长度/`extra=forbid`/R1–R3 model_validator） | 逐条丢弃，`rejected.schema += 1` |
+| **L2 锚点** | A + B | `chunk_id` 一致；`span_text == chunk.text[local_start:local_end]` 一字不差；`source_span` 在 `[chunk.char_start, chunk.char_end]` 内 | 逐条丢弃，`rejected.span_mismatch += 1` |
+| **L3 完整度** | B | C1–C5 见下表 | 按规则降档 / warn / 丢弃 |
+
+**L3 完整度规则**：
+
+| 编号 | 触发 | 处置 |
+|---|---|---|
+| **C1** | `rationale` 与 `span_text` 重合度 ≥ 80%（纯复读） | 丢弃 + warning |
+| **C2** | `rule_expression` 不含任一 `(`/`<`/`=`/`>`/`,`（无机器可解析迹象） | 降级 `class=preference` + warning |
+| **C3** | `kind ∈ {predecessor, resource}` 且 `len(node_rds_candidates) < 2` | 丢弃（predecessor 已被 R3 覆盖；resource 在此补） |
+| **C4** | `scope` 三字段全空 | warning，不丢（M2 BindAgent 还有补救机会） |
+| **C5** | `confidence < CONFIDENCE_REJECT (默认 0.40)` | 丢弃，`rejected.low_confidence += 1` |
+
+#### T4.2 置信度分档（落库时映射到 `process_constraints.review_status`）
+
+| 档 | 区间 | review_status | is_active | UI 含义 |
+|---|---|---|---|---|
+| **HIGH** | `>= 0.85` | draft | false | 评审页置顶 |
+| **MEDIUM** | `0.60 <= c < 0.85` | draft | false | 默认列 |
+| **LOW** | `0.40 <= c < 0.60` | draft | false | 灰显 + "需人工审核"标 |
+| **REJECT** | `< 0.40` | — | — | 不入库，仅 warnings |
+
+阈值集中到 `app/services/constraint_extractor/thresholds.py`，可被环境变量覆盖：
+`EXTRACTOR_CONFIDENCE_REJECT` / `EXTRACTOR_CONFIDENCE_LOW` / `EXTRACTOR_CONFIDENCE_HIGH` /
+`EXTRACTOR_BATCH_MIN_YIELD` (G1，默认 0.20) / `EXTRACTOR_BATCH_MIN_MEAN` (G3，默认 0.50)。
+
+**整批 G 校验**（warning 不阻塞，仅做可观测性）：
+
+| 编号 | 默认阈值 | 含义 |
+|---|---|---|
+| **G1** | `extracted_count / candidates_count >= 0.20` | 通过率下限 |
+| **G2** | `rejected.json_shape == 0` | LLM 出参不能根本不是 JSON |
+| **G3** | `mean_confidence >= 0.50` | 平均置信度下限 |
+| **G4** | 已写入 `span_hash` 不重复 | 防 stub 退化 / 重复抽取 |
+
+#### T4.3 ExtractResponse 增补字段（T5 接入前一并落）
+
+```python
+rejected_count: int
+rejection_breakdown: dict[str, int]   # json_shape | schema | span_mismatch | low_confidence | llm_skipped | completeness
+confidence_buckets: dict[str, int]    # high | medium | low（reject 不计）
+mean_confidence: float | None         # 已入库 draft 的平均；空批返回 None
+prompt_versions: dict[str, str]       # {"stage_a": "stage_a_v1", "stage_b": "stage_b_v1"}
+llm_latency_ms_total: int
+```
+
+#### T4.4 改动清单
+
+- **新增** `app/services/constraint_extractor/schemas/{stage_a_v1.schema.json, stage_b_v1.schema.json}`
+- **新增** `app/services/constraint_extractor/thresholds.py`（阈值 + ENV 旋钮）
+- **新增** `app/services/constraint_extractor/extractor.py`：
   ```python
   class ConstraintExtractor:
       def __init__(self, llm: LLMClient, *, mcp_context_id: str): ...
-      def extract(self, req: ExtractRequest) -> list[ExtractedConstraint]:
-          # Stage A → Stage B → 校验闸口 → 返回
+      def extract(self, req: ExtractRequest) -> ExtractResponse: ...
   ```
-- 校验闸口（在服务层强制，不由 LLM 自觉）：
-  1. JSON Schema 失败 → 丢弃 + warning；
-  2. `source_span` 必须能在原 chunk 命中；`span_text` 与原文 hash 比对，否则丢弃；
-  3. `confidence < 0.6` → 强制 `review_status='draft'`（默认就是）；
-  4. `authority ∈ {regulation, standard}` 且 `severity == 'minor'` → 升 `severity='major'`；
-  5. `kind=predecessor` 且 scope 候选 < 2 → 进 warnings 但不丢。
-- Stub provider 实现：读 `tests/fixtures/extraction/*.expected.json` 回放，让 CI 离线 100% 可复现。
-- 新建 `app/services/constraint_extractor/stub_data.py`：fixture → 内存映射。
+  Stage A -> 逐 candidate 调 Stage B -> 4 层校验 -> 分档 -> 整批 G 自检 -> 返回。
+- **新增** `app/services/constraint_extractor/stub_data.py`：fixture -> 内存映射（CI 离线 100% 可复现）。
+- **修改** `app/schemas/constraint_extraction.py::ExtractResponse`：补 §T4.3 字段。
+- **导出** `__init__.py`：`STAGE_A_SCHEMA` / `STAGE_B_SCHEMA` 常量。
 
-**测试**
-- `tests/services/test_constraint_extractor.py`：
-  - L0：服务初始化 + 空输入 → 空输出 + warning
-  - L1 gold：fixture in → expected out 完全一致（≥ 1 条 gold）
-  - 校验闸口逐条单测（5 条）
+#### T4.5 测试
+
+- **drift**：`tests/services/test_extractor_schema_drift.py` — `ExtractedConstraint.model_json_schema()` 必须 ⊆ `stage_b_v1.schema.json`。
+- **gold (L1)**：`ao_sample_001` 三条命中 + `confidence_buckets={high:1, medium:2, low:0}` + `rejected_count==0`。
+- **反例 fixture**：`tests/fixtures/extraction/ao_sample_001_bad.expected.json` —— 1 条违 R3、1 条违 C1、1 条 confidence=0.3，断言三条全被拒，`rejection_breakdown` 各项+1。
+- **闸口单测**（11 条）：L0 / L1 / L2 / L3.C1–C5 / 置信度分档（HIGH/MEDIUM/LOW/REJECT 各 1）。
+- **整批 G 单测**（4 条）：构造低通过率 / 非 JSON / 低均值 / 重复 hash 各触发对应 G 警告。
 
 **验收**
-- `pytest tests/services/test_constraint_extractor.py -q` 全过；
+
+- `pytest tests/services/test_constraint_extractor.py tests/services/test_extractor_schema_drift.py -q` 全过；
 - `LLM_PROVIDER=stub` 在 CI 默认；
 - 真 OpenAI provider 走 `test_constraint_extractor_openai.py`，标 `@pytest.mark.slow` 不在主流水线。
 
